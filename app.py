@@ -2,6 +2,7 @@ import streamlit as st
 import feedparser
 import requests
 import urllib.parse
+import json
 
 # 1. إعدادات الصفحة الأساسية
 st.set_page_config(page_title="رادار الترند العالمي | Trend Radar", page_icon="🌍", layout="wide")
@@ -53,51 +54,52 @@ country_dict = {
 selected_country_name = st.sidebar.radio("اضغط على الدولة لجلب الترند:", list(country_dict.keys()))
 selected_country_code = country_dict[selected_country_name]
 
-# 4. الخوارزمية الخارقة لجلب الترندات (نظام الأنفاق الثلاثة)
+# 4. خوارزمية "الباب السري" لجلب البيانات من Google Trends API مباشرة
 @st.cache_data(ttl=1800)
 def get_daily_trends(geo_code):
-    url = f"https://trends.google.com/trends/trendingsearches/daily/rss?geo={geo_code}"
+    # الرابط السري المخفي الذي تستخدمه جوجل داخلياً (ليس RSS)
+    target_url = f"https://trends.google.com/trends/api/dailytrends?hl=ar&tz=-120&geo={geo_code}"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+    }
+    
     trends_data = []
     
-    # النفق الأول: عبر خدمة RSS2JSON الرسمية (نسبة النجاح 95%)
+    def process_json(raw_text):
+        # جوجل تضع 5 أحرف غريبة )]}', في بداية الملف لحمايته، نقوم بإزالتها لنتمكن من القراءة
+        clean_text = raw_text[5:] if raw_text.startswith(")]}'") else raw_text
+        try:
+            data = json.loads(clean_text)
+            days = data.get('default', {}).get('trendingSearchesDays', [])
+            if days:
+                for search in days[0].get('trendingSearches', []):
+                    title = search.get('title', {}).get('query', '')
+                    traffic = search.get('formattedTraffic', '+10K')
+                    if title:
+                        trends_data.append({"title": title, "traffic": traffic})
+            return trends_data
+        except:
+            return []
+
+    # المحاولة الأولى: الدخول المباشر
     try:
-        api_url = f"https://api.rss2json.com/v1/api.json?rss_url={url}"
-        res = requests.get(api_url, timeout=10)
+        res = requests.get(target_url, headers=headers, timeout=10)
         if res.status_code == 200:
-            data = res.json()
-            if data.get('status') == 'ok':
-                for item in data.get('items', []):
-                    trends_data.append({"title": item.get('title'), "traffic": "مشتعل جداً 🔥"})
-                if trends_data: return trends_data
+            result = process_json(res.text)
+            if result: return result
     except: pass
 
-    # النفق الثاني: عبر خدمة AllOrigins (نسبة النجاح 90%)
+    # المحاولة الثانية: الدخول السري عبر وسيط AllOrigins
     try:
-        encoded_url = urllib.parse.quote(url, safe='')
-        proxy_url = f"https://api.allorigins.win/get?url={encoded_url}"
-        res = requests.get(proxy_url, timeout=10)
+        proxy_url = f"https://api.allorigins.win/raw?url={urllib.parse.quote(target_url)}"
+        res = requests.get(proxy_url, headers=headers, timeout=15)
         if res.status_code == 200:
-            data = res.json()
-            if 'contents' in data:
-                feed = feedparser.parse(data['contents'])
-                for entry in feed.entries:
-                    traffic = entry.get('ht_approx_traffic', '+10,000 بحث 🔥') 
-                    trends_data.append({"title": entry.title, "traffic": traffic})
-                if trends_data: return trends_data
+            result = process_json(res.text)
+            if result: return result
     except: pass
-        
-    # النفق الثالث: التخفي المباشر كمتصفح أندرويد (نسبة النجاح 70%)
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36"}
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            feed = feedparser.parse(res.content)
-            for entry in feed.entries:
-                traffic = entry.get('ht_approx_traffic', '+10,000 بحث 🔥') 
-                trends_data.append({"title": entry.title, "traffic": traffic})
-            if trends_data: return trends_data
-    except: pass
-        
+
     return trends_data
 
 # 5. دالة التحليل بواسطة Groq
@@ -147,7 +149,7 @@ def analyze_trend_with_groq(trend_word):
 # --- واجهة المستخدم ---
 st.subheader(f"🔥 الكلمات المشتعلة من جوجل ترند: {selected_country_name.split(' ')[0]}")
 
-with st.spinner('جاري سحب البيانات المباشرة من خوادم Google Trends عبر الأنفاق الآمنة...'):
+with st.spinner('جاري اختراق واجهة جوجل الداخلية وجلب البيانات...'):
     trends_list = get_daily_trends(selected_country_code)
 
 if trends_list:
@@ -177,4 +179,4 @@ if trends_list:
                 st.success("تم الانتهاء من التحليل الشامل!")
                 st.info(analysis_report)
 else:
-    st.error("⚠️ لم نتمكن من جلب الترندات حالياً، حماية جوجل قوية جداً في هذه اللحظة.")
+    st.error("⚠️ لم نتمكن من جلب الترندات. سيرفرات Streamlit المجانية محظورة بالكامل من جوجل حالياً.")
