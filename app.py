@@ -1,15 +1,14 @@
 import streamlit as st
 import feedparser
-import requests
+import re
+from collections import Counter
 
 # 1. إعدادات الصفحة الأساسية
-st.set_page_config(page_title="رادار الترند الذكي | Trend Radar", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="رادار الأخبار المباشر | News Radar", page_icon="📡", layout="wide")
 
-st.title("🧠 غرفة الأخبار الآلية (تحليل الترند بالذكاء الاصطناعي)")
-st.markdown("نظام مستقل لا يعتمد على جوجل. يقوم بمسح 24 مصدراً واستنتاج الترندات المشتعلة حالياً.")
+st.title("📡 غرفة الأخبار المباشرة ورادار الكلمات المفتاحية")
+st.markdown("نظام ذكي يقوم بمسح 24 مصدراً، استخراج الكلمات المشتعلة برمجياً (بدون قيود)، وتوجيهك للمصادر مباشرة.")
 st.divider()
-
-GROQ_API_KEY = "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"
 
 # 2. بنك المصادر الشامل
 ALL_SOURCES = [
@@ -39,89 +38,71 @@ ALL_SOURCES = [
     {"name": "الشرق الأوسط (منشنز)", "url": "https://rss.app/feeds/GsU4dAB2KkXc8ctB.xml"}
 ]
 
-# 3. القائمة الجانبية للتوجيه الجغرافي
-st.sidebar.header("🌍 نطاق الرادار")
-country_list = ["مصر 🇪🇬", "العالم العربي 🌍", "عالمياً 🌐"]
-selected_scope = st.sidebar.radio("ركز استنتاج الترند على:", country_list)
+# 3. كلمات التوقف لفلترة الترند (الكلمات التي لا نعتبرها ترند)
+STOP_WORDS = set([
+    "على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "الذين", "عبر", "خلال", "بسبب", "حول",
+    "وقد", "أنه", "كما", "ذلك", "وهي", "وهو", "بين", "عندما", "فقط", "وهناك", "عليها", "فيها",
+    "منها", "إليها", "وإن", "وأن", "فإن", "بأن", "اليوم", "أمس", "غدا", "صور", "فيديو", "عاجل",
+    "تفاصيل", "أكثر", "أقل", "أول", "آخر", "أهم", "بعض", "شاهد", "كيف", "لماذا", "متى", "أين"
+])
 
-# 4. دالة جلب العناوين من كل المصادر (مخففة لتناسب الذكاء الاصطناعي)
+# 4. دالة جلب الأخبار وحفظها كقاعدة بيانات مؤقتة
 @st.cache_data(ttl=1800)
-def fetch_all_headlines():
-    headlines = []
-    # سحب أهم 3 أخبار فقط من كل مصدر لتجنب الضغط على السيرفر
+def fetch_news():
+    all_news = []
     for source in ALL_SOURCES:
         try:
             feed = feedparser.parse(source['url'])
-            for entry in feed.entries[:3]:
-                headlines.append(f"- {entry.title} (المصدر: {source['name']})")
+            for entry in feed.entries[:5]: # نأخذ أحدث 5 أخبار من كل مكان
+                all_news.append({
+                    "title": entry.title,
+                    "link": entry.link,
+                    "source": source['name']
+                })
         except:
             continue
-    return headlines
+    return all_news
 
-# 5. دالة الذكاء الاصطناعي لاستنتاج الترند (مع كاشف أخطاء دقيق)
-def extract_trends_with_groq(headlines_list, scope):
-    text_block = "\n".join(headlines_list)
-    
-    prompt = f"""
-    أنت محلل ترندات وصحفي خبير.
-    قمت بجمع هذه العناوين الإخبارية والمنشورات من 24 مصدراً مختلفاً في هذه اللحظة:
-    
-    {text_block}
-    
-    المهمة:
-    بناءً على التكرار والمواضيع المشتركة في هذه العناوين، استنتج أهم 6 "ترندات" مشتعلة الآن، مع التركيز على نطاق: {scope}.
-    
-    أخرج النتيجة باللغة العربية بتنسيق منظم كالتالي لكل ترند:
-    ## 🎯 [اسم الترند أو الحدث]
-    * **القصة باختصار:** [سطرين يشرحان ما الذي يحدث ولماذا هو ترند]
-    * **المصادر التي تتحدث عنه:** [اذكر أمثلة للمصادر التي تناولته من العناوين المرفقة]
-    ---
-    """
-    
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3
-    }
-    
-    try:
-        # إضافة مهلة 30 ثانية للاتصال حتى لا يفصل الموقع
-        res = requests.post(url, json=payload, headers=headers, timeout=30)
-        
-        # إذا كان الرد ناجحاً
-        if res.status_code == 200:
-            data = res.json()
-            return data['choices'][0]['message']['content'].strip()
-        # إذا رفض السيرفر الطلب (نطبع السبب لنعرفه)
-        else:
-            error_details = res.json().get('error', {}).get('message', res.text)
-            return f"⚠️ رفض خادم Groq الطلب. السبب الحقيقي: {error_details}"
-            
-    except Exception as e:
-        return f"⚠️ حدث خطأ في الاتصال بالإنترنت أو الخادم: {str(e)}"
+# 5. خوارزمية استخراج الكلمات المفتاحية
+def extract_top_keywords(news_list, top_n=15):
+    words = []
+    for item in news_list:
+        # مسح التشكيل والرموز للحصول على الكلمة الصافية
+        clean_text = re.sub(r'[^\w\s]', '', item['title'])
+        for word in clean_text.split():
+            # نأخذ الكلمات الطويلة ونتجاهل حروف الجر
+            if len(word) > 3 and word not in STOP_WORDS:
+                words.append(word)
+                
+    freq = Counter(words)
+    return [word for word, count in freq.most_common(top_n)]
 
-# --- واجهة المستخدم ---
-st.subheader(f"📡 رادار الذكاء الاصطناعي: {selected_scope}")
+# --- واجهة المستخدم والتفاعل ---
+with st.spinner('⏳ جاري مسح 24 جريدة وموقع إخباري لاستخراج الترندات...'):
+    news_data = fetch_news()
 
-if st.button("🚀 تشغيل الرادار ومسح المصادر الآن", type="primary", use_container_width=True):
-    with st.spinner('⏳ جاري جمع أحدث الأخبار من المصادر...'):
-        all_news = fetch_all_headlines()
+if news_data:
+    top_keywords = extract_top_keywords(news_data)
+    
+    # القائمة الجانبية (الأزرار السريعة)
+    st.sidebar.header("🔥 الكلمات المشتعلة الآن")
+    selected_keyword = st.sidebar.radio("اختر الترند لترى أخباره الأصلية:", top_keywords)
+    
+    # الشاشة الرئيسية
+    st.subheader(f"📰 الأخبار العاجلة المتعلقة بـ: 【 {selected_keyword} 】")
+    
+    # البحث الفوري عن الكلمة في العناوين
+    related_news = [item for item in news_data if selected_keyword in item['title']]
+    
+    st.write(f"تم العثور على **{len(related_news)}** خبر/تغريدة تتحدث عن هذا الموضوع في مصادرك:")
+    st.write("") # مسافة فارغة
+    
+    # عرض الأخبار بشكل روابط أنيقة
+    for news in related_news:
+        st.markdown(f"🔹 **[{news['title']}]({news['link']})** *(المصدر: {news['source']})*")
         
-    if all_news:
-        st.success(f"✅ تم جمع {len(all_news)} خبراً وتغريدة بنجاح لتغذية الرادار! جاري تحليلها الآن...")
+    st.divider()
+    st.info("💡 اضغط على أي عنوان إخباري باللون الأزرق للانتقال مباشرة إلى الموقع الأصلي وقراءة التفاصيل.")
         
-        with st.spinner('🧠 المحلل الآلي يقرأ الأخبار ويستنتج الترندات... (قد يستغرق 10 ثوانٍ)'):
-            trends_report = extract_trends_with_groq(all_news, selected_scope)
-            
-        st.divider()
-        if "⚠️" in trends_report:
-            st.error(trends_report)
-        else:
-            st.markdown(trends_report)
-    else:
-        st.error("⚠️ لم نتمكن من جلب الأخبار. يرجى التحقق من المصادر.")
+else:
+    st.error("⚠️ لم نتمكن من جلب الأخبار. يرجى التحقق من اتصال الإنترنت أو تحديث الصفحة.")
