@@ -1,3 +1,5 @@
 streamlit
 pytrends
 pandas
+feedparser
+requests
