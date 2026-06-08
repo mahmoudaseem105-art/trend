@@ -56,4 +56,104 @@ selected_country_code = country_dict[selected_country_name]
 # 4. دالة جلب الترندات المتطورة (مع استخدام وسيط AllOrigins لكسر حظر جوجل)
 @st.cache_data(ttl=1800)
 def get_daily_trends(geo_code):
-    target_url = f"https://trends.google.
+    target_url = f"https://trends.google.com/trends/trendingsearches/daily/rss?geo={geo_code}"
+    encoded_url = urllib.parse.quote(target_url, safe='')
+    proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    try:
+        response = requests.get(proxy_url, headers=headers, timeout=15)
+        if response.status_code == 200:
+            feed = feedparser.parse(response.content)
+            trends_data = []
+            for entry in feed.entries:
+                title = entry.title
+                traffic = entry.get('ht_approx_traffic', '10,000+') 
+                trends_data.append({"title": title, "traffic": traffic})
+            return trends_data
+        else:
+            return []
+    except Exception as e:
+        return []
+
+# 5. دالة التحليل بواسطة Groq
+def analyze_trend_with_groq(trend_word):
+    context_headlines = []
+    for source in ALL_SOURCES:
+        try:
+            feed = feedparser.parse(source['url'])
+            for entry in feed.entries[:2]:
+                context_headlines.append(f"- {entry.title}")
+        except:
+            continue
+            
+    context_text = "\n".join(context_headlines)
+    
+    prompt = f"""
+    أنت رئيس تحرير صحفي خبير ومحلل سياسي واقتصادي.
+    الكلمة الأكثر بحثاً (الترند) اليوم هي: "{trend_word}"
+    
+    تم مسح 24 مصدراً إخبارياً عالمياً ومحلياً، وهذه أحدث العناوين:
+    {context_text}
+    
+    بناءً على العناوين، اكتب تقريراً صحفياً مختصراً باللغة العربية يشرح:
+    1. لماذا هذه الكلمة ترند اليوم؟
+    2. ما هو السياق المحلي أو العالمي لهذا الحدث؟
+    ضع التقرير في فقرتين احترافيتين بدون مقدمات.
+    """
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.5
+    }
+    
+    try:
+        res = requests.post(url, json=payload, headers=headers)
+        data = res.json()
+        return data['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        return "⚠️ تعذر الاتصال بمحرك الذكاء الاصطناعي حالياً."
+
+# --- واجهة المستخدم ---
+st.subheader(f"🔥 مؤشرات البحث المشتعلة في {selected_country_name.split(' ')[0]}")
+
+with st.spinner('جاري العبور من خوادم جوجل وجلب البيانات...'):
+    trends_list = get_daily_trends(selected_country_code)
+
+if trends_list:
+    st.write("**مؤشرات التداول على الأخبار (حسب عمليات البحث):**")
+    
+    cols = st.columns(3)
+    
+    trend_titles_only = []
+    for i, trend in enumerate(trends_list[:9]): 
+        trend_titles_only.append(trend['title'])
+        with cols[i % 3]:
+            st.metric(label=f"#{i+1} {trend['title']}", value=f"{trend['traffic']} بحث", delta="🔥 صاعد بقوة")
+            
+    st.divider()
+            
+    st.write("**🤖 الغوص في عمق الترند بالذكاء الاصطناعي:**")
+    col_a, col_b = st.columns([1, 2])
+    
+    with col_a:
+        selected_trend = st.selectbox("اختر موضوعاً لتكليف المحرر الآلي بتحليله:", trend_titles_only)
+        analyze_btn = st.button("حلل هذا الترند الآن", type="primary", use_container_width=True)
+        
+    with col_b:
+        if analyze_btn:
+            with st.spinner(f"جاري مسح 24 مصدراً إخبارياً لتحليل '{selected_trend}'... قد يستغرق بضع ثوانٍ"):
+                analysis_report = analyze_trend_with_groq(selected_trend)
+                st.success("تم الانتهاء من التحليل الشامل!")
+                st.info(analysis_report)
+else:
+    st.error("⚠️ لم نتمكن من جلب الترندات حالياً، هناك ضغط استثنائي.")
