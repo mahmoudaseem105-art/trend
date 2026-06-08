@@ -44,21 +44,21 @@ st.sidebar.header("🌍 نطاق الرادار")
 country_list = ["مصر 🇪🇬", "العالم العربي 🌍", "عالمياً 🌐"]
 selected_scope = st.sidebar.radio("ركز استنتاج الترند على:", country_list)
 
-# 4. دالة جلب العناوين من كل المصادر (تتحدث كل نصف ساعة)
+# 4. دالة جلب العناوين من كل المصادر (مخففة لتناسب الذكاء الاصطناعي)
 @st.cache_data(ttl=1800)
 def fetch_all_headlines():
     headlines = []
-    # نجلب أهم 5 عناوين من كل مصدر ليكون لدينا حوالي 120 خبر
+    # سحب أهم 3 أخبار فقط من كل مصدر لتجنب الضغط على السيرفر
     for source in ALL_SOURCES:
         try:
             feed = feedparser.parse(source['url'])
-            for entry in feed.entries[:5]:
+            for entry in feed.entries[:3]:
                 headlines.append(f"- {entry.title} (المصدر: {source['name']})")
         except:
             continue
     return headlines
 
-# 5. دالة الذكاء الاصطناعي لاستنتاج الترند
+# 5. دالة الذكاء الاصطناعي لاستنتاج الترند (مع كاشف أخطاء دقيق)
 def extract_trends_with_groq(headlines_list, scope):
     text_block = "\n".join(headlines_list)
     
@@ -86,30 +86,42 @@ def extract_trends_with_groq(headlines_list, scope):
     payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3 # درجة حرارة منخفضة ليكون التحليل دقيقاً وجاداً
+        "temperature": 0.3
     }
     
     try:
-        res = requests.post(url, json=payload, headers=headers)
-        data = res.json()
-        return data['choices'][0]['message']['content'].strip()
+        # إضافة مهلة 30 ثانية للاتصال حتى لا يفصل الموقع
+        res = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        # إذا كان الرد ناجحاً
+        if res.status_code == 200:
+            data = res.json()
+            return data['choices'][0]['message']['content'].strip()
+        # إذا رفض السيرفر الطلب (نطبع السبب لنعرفه)
+        else:
+            error_details = res.json().get('error', {}).get('message', res.text)
+            return f"⚠️ رفض خادم Groq الطلب. السبب الحقيقي: {error_details}"
+            
     except Exception as e:
-        return "⚠️ تعذر الاتصال بمحرك الذكاء الاصطناعي حالياً."
+        return f"⚠️ حدث خطأ في الاتصال بالإنترنت أو الخادم: {str(e)}"
 
 # --- واجهة المستخدم ---
 st.subheader(f"📡 رادار الذكاء الاصطناعي: {selected_scope}")
 
 if st.button("🚀 تشغيل الرادار ومسح المصادر الآن", type="primary", use_container_width=True):
-    with st.spinner('⏳ جاري جمع أحدث الأخبار من 24 مصدراً...'):
+    with st.spinner('⏳ جاري جمع أحدث الأخبار من المصادر...'):
         all_news = fetch_all_headlines()
         
     if all_news:
-        st.success(f"✅ تم جمع {len(all_news)} خبر وتغريدة بنجاح! جاري تسليمها للمحلل الآلي (Groq)...")
+        st.success(f"✅ تم جمع {len(all_news)} خبراً وتغريدة بنجاح لتغذية الرادار! جاري تحليلها الآن...")
         
-        with st.spinner('🧠 المحلل الآلي يقوم باستنتاج الترندات الحالية...'):
+        with st.spinner('🧠 المحلل الآلي يقرأ الأخبار ويستنتج الترندات... (قد يستغرق 10 ثوانٍ)'):
             trends_report = extract_trends_with_groq(all_news, selected_scope)
             
         st.divider()
-        st.markdown(trends_report)
+        if "⚠️" in trends_report:
+            st.error(trends_report)
+        else:
+            st.markdown(trends_report)
     else:
         st.error("⚠️ لم نتمكن من جلب الأخبار. يرجى التحقق من المصادر.")
