@@ -4,105 +4,106 @@ import re
 from collections import Counter
 
 # 1. إعدادات الصفحة الأساسية
-st.set_page_config(page_title="رادار الأخبار المباشر | News Radar", page_icon="📡", layout="wide")
+st.set_page_config(page_title="معرض الترند البصري | Trend Hub", page_icon="🔥", layout="wide")
 
-st.title("📡 غرفة الأخبار المباشرة ورادار الكلمات المفتاحية")
-st.markdown("نظام ذكي يقوم بمسح 24 مصدراً، استخراج الكلمات المشتعلة برمجياً (بدون قيود)، وتوجيهك للمصادر مباشرة.")
+st.title("🔥 معرض الترندات البصري (Trend Link Hub)")
+st.markdown("يصطاد المواضيع الأكثر اشتعالاً على الساحة ويعرضها لك بصرياً لتلهم محتواك.")
 st.divider()
 
-# 2. بنك المصادر الشامل
+# 2. بنك المصادر (المختص بالسوشيال ميديا والأخبار السريعة)
 ALL_SOURCES = [
     {"name": "The Guardian", "url": "https://www.theguardian.com/world/rss"},
-    {"name": "The Economist", "url": "https://www.economist.com/the-world-this-week/rss.xml"},
     {"name": "BBC News", "url": "http://feeds.bbci.co.uk/news/world/rss.xml"},
     {"name": "Al Jazeera", "url": "https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9"},
-    {"name": "التلفزيون العربي", "url": "https://rss.app/feeds/kT7C8wffs4FlVogb.xml"},
     {"name": "عربي 21", "url": "https://rss.app/feeds/IELo97hFudhqzc3b.xml"},
     {"name": "منصة إيكاد", "url": "https://rss.app/feeds/dIksWt06BYI9wq9h.xml"},
     {"name": "شبكة رصد", "url": "https://rss.app/feeds/UY9b0tCrWqLlDUS2.xml"},
-    {"name": "الشرق الأوسط", "url": "https://rss.app/feeds/WrrcuX75FOhb3MyZ.xml"},
-    {"name": "مدى مصر", "url": "https://rss.app/feeds/aZtPJd9x1TdXhpbc.xml"},
-    {"name": "شبكة مزيد", "url": "https://rss.app/feeds/EKNJ1yBhz9dYQesm.xml"},
     {"name": "عربي بوست", "url": "https://rss.app/feeds/LzcCUDjvwsYkxeJb.xml"},
-    {"name": "المصري اليوم", "url": "https://rss.app/feeds/0qilsswhtljm7TpX.xml"},
-    {"name": "حقوق الإنسان", "url": "https://rss.app/feeds/KQOHigY4eHs2OXV0.xml"},
-    {"name": "العشرين أونلاين", "url": "https://rss.app/feeds/UitAtgEww18TWQag.xml"},
-    {"name": "العربية مصر", "url": "https://rss.app/feeds/hoc4wHdnB7ZkJIun.xml"},
-    {"name": "صدى مصر", "url": "https://rss.app/feeds/QmEgZe5stNIFBrub.xml"},
-    {"name": "تكنوقراط", "url": "https://rss.app/feeds/ITEpCccZdY1r0M4P.xml"},
     {"name": "المصري اليوم (إكس)", "url": "https://rss.app/feeds/idlogJBSLTtWCMLm.xml"},
-    {"name": "تليجراف مصر", "url": "https://rss.app/feeds/yS4uMduCaejNZYj8.xml"},
-    {"name": "مزيد ستوريز", "url": "https://rss.app/feeds/n5ZkHXC4f0Zx7tzt.xml"},
-    {"name": "القاهرة 24", "url": "https://rss.app/feeds/fSxYHaCDdTtQnPcc.xml"},
-    {"name": "حدث بالفعل", "url": "https://rss.app/feeds/sUfKUXNv3LLJjC8X.xml"},
     {"name": "الشرق الأوسط (منشنز)", "url": "https://rss.app/feeds/GsU4dAB2KkXc8ctB.xml"}
 ]
 
-# 3. كلمات التوقف لفلترة الترند (الكلمات التي لا نعتبرها ترند)
+# 3. كلمات التوقف (لإبعاد الكلمات العادية والتركيز على الترند الحقيقي)
 STOP_WORDS = set([
-    "على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "الذين", "عبر", "خلال", "بسبب", "حول",
-    "وقد", "أنه", "كما", "ذلك", "وهي", "وهو", "بين", "عندما", "فقط", "وهناك", "عليها", "فيها",
-    "منها", "إليها", "وإن", "وأن", "فإن", "بأن", "اليوم", "أمس", "غدا", "صور", "فيديو", "عاجل",
-    "تفاصيل", "أكثر", "أقل", "أول", "آخر", "أهم", "بعض", "شاهد", "كيف", "لماذا", "متى", "أين"
+    "على", "إلى", "هذا", "هذه", "التي", "الذي", "عبر", "خلال", "بسبب", "حول", "عاجل",
+    "وقد", "أنه", "كما", "ذلك", "وهي", "وهو", "بين", "فقط", "فيديو", "صور", "شاهد",
+    "منها", "وإن", "وأن", "اليوم", "أمس", "غدا", "تفاصيل", "أكثر", "كيف", "لماذا"
 ])
 
-# 4. دالة جلب الأخبار وحفظها كقاعدة بيانات مؤقتة
+# 4. دالة استخراج الصور من الـ RSS
+def extract_image_url(entry):
+    # محاولة سحب الصورة من الميديا
+    if hasattr(entry, 'media_content') and len(entry.media_content) > 0:
+        return entry.media_content[0]['url']
+    if hasattr(entry, 'enclosures') and len(entry.enclosures) > 0:
+        return entry.enclosures[0]['href']
+    # محاولة سحب الصورة من الوصف (HTML)
+    if hasattr(entry, 'summary'):
+        match = re.search(r'<img[^>]+src="([^">]+)"', entry.summary)
+        if match:
+            return match.group(1)
+    # صورة افتراضية في حال لم يوجد صورة
+    return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
+
+# 5. دالة جلب البيانات مع الصور
 @st.cache_data(ttl=1800)
-def fetch_news():
+def fetch_trending_data():
     all_news = []
     for source in ALL_SOURCES:
         try:
             feed = feedparser.parse(source['url'])
-            for entry in feed.entries[:5]: # نأخذ أحدث 5 أخبار من كل مكان
+            for entry in feed.entries[:8]: # نركز على أهم الأخبار فقط
+                image_url = extract_image_url(entry)
                 all_news.append({
                     "title": entry.title,
                     "link": entry.link,
-                    "source": source['name']
+                    "source": source['name'],
+                    "image": image_url
                 })
         except:
             continue
     return all_news
 
-# 5. خوارزمية استخراج الكلمات المفتاحية
-def extract_top_keywords(news_list, top_n=15):
+# 6. خوارزمية صيد الترندات القوية فقط
+def extract_dominating_trends(news_list, top_n=6):
     words = []
     for item in news_list:
-        # مسح التشكيل والرموز للحصول على الكلمة الصافية
         clean_text = re.sub(r'[^\w\s]', '', item['title'])
         for word in clean_text.split():
-            # نأخذ الكلمات الطويلة ونتجاهل حروف الجر
-            if len(word) > 3 and word not in STOP_WORDS:
+            if len(word) > 4 and word not in STOP_WORDS: # الكلمات الأطول غالباً هي أسماء وأحداث
                 words.append(word)
                 
     freq = Counter(words)
-    return [word for word, count in freq.most_common(top_n)]
+    # نرجع أهم الكلمات التي تكررت كثيراً فقط
+    return [word for word, count in freq.most_common(top_n) if count > 1]
 
-# --- واجهة المستخدم والتفاعل ---
-with st.spinner('⏳ جاري مسح 24 جريدة وموقع إخباري لاستخراج الترندات...'):
-    news_data = fetch_news()
+# --- واجهة المستخدم (الـ Visual Hub) ---
+with st.spinner('⏳ جاري مسح شبكات السوشيال ميديا وتجهيز معرض الترندات...'):
+    news_data = fetch_trending_data()
 
 if news_data:
-    top_keywords = extract_top_keywords(news_data)
+    dominating_trends = extract_dominating_trends(news_data)
     
-    # القائمة الجانبية (الأزرار السريعة)
-    st.sidebar.header("🔥 الكلمات المشتعلة الآن")
-    selected_keyword = st.sidebar.radio("اختر الترند لترى أخباره الأصلية:", top_keywords)
-    
-    # الشاشة الرئيسية
-    st.subheader(f"📰 الأخبار العاجلة المتعلقة بـ: 【 {selected_keyword} 】")
-    
-    # البحث الفوري عن الكلمة في العناوين
-    related_news = [item for item in news_data if selected_keyword in item['title']]
-    
-    st.write(f"تم العثور على **{len(related_news)}** خبر/تغريدة تتحدث عن هذا الموضوع في مصادرك:")
-    st.write("") # مسافة فارغة
-    
-    # عرض الأخبار بشكل روابط أنيقة
-    for news in related_news:
-        st.markdown(f"🔹 **[{news['title']}]({news['link']})** *(المصدر: {news['source']})*")
+    if dominating_trends:
+        st.sidebar.header("🔥 الترندات المسيطرة الآن")
+        selected_trend = st.sidebar.radio("اختر الترند لعرض الميديا الخاصة به:", dominating_trends)
         
-    st.divider()
-    st.info("💡 اضغط على أي عنوان إخباري باللون الأزرق للانتقال مباشرة إلى الموقع الأصلي وقراءة التفاصيل.")
+        st.subheader(f"📸 معرض الترند: 【 {selected_trend} 】")
         
+        # جلب الكروت (التي تحتوي على الكلمة) بحد أقصى 6 كروت لعدم الازدحام
+        related_items = [item for item in news_data if selected_trend in item['title']][:6]
+        
+        # إنشاء شبكة عرض (Grid) بـ 3 أعمدة مثل انستجرام
+        cols = st.columns(3)
+        
+        for index, item in enumerate(related_items):
+            with cols[index % 3]:
+                # عرض الكارت البصري
+                st.image(item['image'], use_container_width=True)
+                st.markdown(f"**{item['source']}**")
+                st.markdown(f"[{item['title']}]({item['link']})")
+                st.write("---")
+    else:
+        st.info("لم يتم رصد ترند قوي يسيطر على الساحة في هذه اللحظة، حاول بعد قليل.")
 else:
-    st.error("⚠️ لم نتمكن من جلب الأخبار. يرجى التحقق من اتصال الإنترنت أو تحديث الصفحة.")
+    st.error("⚠️ لم نتمكن من جلب البيانات، يرجى تحديث الصفحة.")
