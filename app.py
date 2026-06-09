@@ -8,7 +8,7 @@ from PIL import Image
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
 # اسم ملف اللوجو المستضاف في جيت هاب
-LOGO_IMAGE_PATH = "channels4_profile.jpg" 
+LOGO_IMAGE_PATH = "channels4_profile.png" 
 
 # دالة ذكية لفتح وتصغير اللوجو برمجياً لضمان ظهوره بشكل احترافي
 def get_resized_logo(width_size=120):
