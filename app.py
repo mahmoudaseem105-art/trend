@@ -6,19 +6,23 @@ from collections import Counter
 # 1. إعدادات الصفحة والهوية الرسمية للمنصة
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
-# اسم ملف اللوجو الذي سيتم قراءته من جيت هاب
+# اسم ملف اللوجو
 LOGO_IMAGE = "channels4_profile.jpg" 
 
-# --- عرض اللوجو الكبير في الشاشة الرئيسية ---
-col_logo_1, col_logo_2, col_logo_3 = st.columns([1, 2, 1])
-with col_logo_2:
-    try:
-        st.image(LOGO_IMAGE, caption="المنصة الرسمية - SherifOsmanClub", use_container_width=True)
-    except:
-        st.warning("جاري تحميل اللوجو... يرجى التأكد من رفع صورة channels4_profile.jpg إلى جيت هاب.")
+# --- تنسيق احترافي: اللوجو صغير في الأعلى بجوار العنوان ---
+col_text, col_logo = st.columns([5, 1]) # تقسيم الشاشة ليكون اللوجو في الزاوية
 
-st.title("🔥 SherifOsmanClub الإخبارية")
-st.markdown("الرادار المستقل للأخبار العاجلة والترندات الأكثر تداولاً وجدلاً على الساحة.")
+with col_logo:
+    try:
+        # عرض اللوجو بحجم صغير واحترافي
+        st.image(LOGO_IMAGE, width=120)
+    except:
+        pass # إخفاء الخطأ إذا لم يتم رفع الصورة بعد
+
+with col_text:
+    st.title("🔥 SherifOsmanClub الإخبارية")
+    st.markdown("الرادار المستقل للأخبار العاجلة والترندات الأكثر تداولاً وجدلاً على الساحة.")
+
 st.divider()
 
 # 2. مصادر "النبض الإخباري والسوشيال ميديا"
@@ -79,13 +83,15 @@ def extract_dominating_trends(news_list):
 news_data = fetch_trending_data()
 dominating_trends = extract_dominating_trends(news_data)
 
-# إعدادات القائمة الجانبية (Sidebar) مع اللوجو
-try:
-    st.sidebar.image(LOGO_IMAGE, use_container_width=True)
-except:
-    pass # في حالة تأخر تحميل الصورة لا يظهر خطأ يزعج الزائر
+# --- إعدادات القائمة الجانبية (Sidebar) مع تنسيق اللوجو المصغر ---
+side_col1, side_col2, side_col3 = st.sidebar.columns([1, 2, 1]) # أعمدة لتوسيط اللوجو وتصغيره
+with side_col2:
+    try:
+        st.image(LOGO_IMAGE, use_container_width=True)
+    except:
+        pass 
     
-st.sidebar.markdown("<h3 style='text-align: center;'>SherifOsmanClub</h3>", unsafe_allow_html=True)
+st.sidebar.markdown("<h3 style='text-align: center; margin-top: -10px;'>SherifOsmanClub</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
 
 if dominating_trends:
