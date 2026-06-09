@@ -7,7 +7,7 @@ from collections import Counter
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
 # اسم ملف اللوجو
-LOGO_IMAGE = "channels4_profile.png" 
+LOGO_IMAGE = "channels4_profile.jpg" 
 
 # --- تنسيق احترافي: اللوجو صغير في الأعلى بجوار العنوان ---
 col_text, col_logo = st.columns([5, 1]) # تقسيم الشاشة ليكون اللوجو في الزاوية
