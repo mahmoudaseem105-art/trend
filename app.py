@@ -33,7 +33,7 @@ with col_text:
 
 st.divider()
 
-# 2. بنك المصادر الشامل والكامل (24 مصدراً) مع ميزة التفعيل والأسماء المخصصة كما في الصورة
+# 2. بنك المصادر الشامل والكامل (24 مصدراً)
 ALL_SOURCES = [
     {"name": "المصري اليوم Page", "url": "https://rss.app/feeds/0qilsswhtljm7TpX.xml"},
     {"name": "القاهرة 24 Page", "url": "https://rss.app/feeds/fSxYHaCDdTtQnPcc.xml"},
@@ -55,7 +55,7 @@ ALL_SOURCES = [
     {"name": "المصري اليوم إكس Page", "url": "https://rss.app/feeds/idlogJBSLTtWCMLm.xml"},
     {"name": "مزيد ستوريز Page", "url": "https://rss.app/feeds/n5ZkHXC4f0Zx7tzt.xml"},
     {"name": "الشرق الأوسط منشنز Page", "url": "https://rss.app/feeds/GsU4dAB2KkXc8ctB.xml"},
-    {"name": "عربي نيوز Page", "url": "https://rss.app/feeds/IELo97hFudhqzc3b.xml"}, # مصدر بديل
+    {"name": "عربي نيوز Page", "url": "https://rss.app/feeds/IELo97hFudhqzc3b.xml"},
     {"name": "The Guardian Page", "url": "https://www.theguardian.com/world/rss"},
     {"name": "The Economist Page", "url": "https://www.economist.com/the-world-this-week/rss.xml"},
     {"name": "BBC News Page", "url": "http://feeds.bbci.co.uk/news/world/rss.xml"}
@@ -80,7 +80,7 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 5. جلب البيانات من الـ 24 مصدراً مع التخزين المؤقت
+# 5. جلب البيانات
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
@@ -112,8 +112,8 @@ def extract_dominating_trends(news_list, top_n=6):
     freq = Counter(words)
     return [word for word, count in freq.most_common(top_n) if count > 1]
 
-# --- تشغيل الواجهة وجلب البيانات ---
-with St.spinner('⏳ جاري تحديث الرادار ومسح الـ 24 منصة...'):
+# --- تشغيل الواجهة وجلب البيانات (تم تصحيح الحرف هنا) ---
+with st.spinner('⏳ جاري تحديث الرادار ومسح الـ 24 منصة...'):
     news_data, source_data_dict = fetch_trending_data()
 
 # --- إعدادات السحاب الجانبي (Sidebar) ---
@@ -126,7 +126,6 @@ if sidebar_logo:
 st.sidebar.markdown("<h3 style='text-align: center; margin-top: -5px;'>SherifOsmanClub</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
 
-# الحفاظ على خيار التحكم لمعرفة ماذا اختار المستخدم (ترند أم مصدر محدد)
 if 'view_mode' not in st.session_state:
     st.session_state.view_mode = 'trend'
 if 'selected_value' not in st.session_state:
@@ -136,7 +135,6 @@ if 'selected_value' not in st.session_state:
 dominating_trends = extract_dominating_trends(news_data)
 if dominating_trends:
     st.sidebar.subheader("🚨 ترند الساعة")
-    # إذا ضغط المستخدم على ترند يحول وضع العرض لـ 'trend'
     for trend in dominating_trends:
         if st.sidebar.button(f"🔥 {trend}", key=f"tr_{trend}", use_container_width=True):
             st.session_state.view_mode = 'trend'
@@ -144,32 +142,27 @@ if dominating_trends:
 
 st.sidebar.divider()
 
-# --- القائمة الثانية الجديدة تماماً: غرف ومصادر الأخبار الحية المضيئة ---
+# --- القائمة الثانية: غرف ومصادر الأخبار الحية المضيئة ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
-    # تنسيق الاسم بوضع لمبة خضراء مضيئة بجانبه تماماً كما في الصورة المرفقة
     display_name = f"🟢 {source['name']}"
     if st.sidebar.button(display_name, key=f"src_{source['name']}", use_container_width=True):
         st.session_state.view_mode = 'source'
         st.session_state.selected_value = source['name']
 
-# في المرة الأولى نقوم بضبط القيمة الافتراضية لأول ترند صاعد
 if st.session_state.selected_value == "" and dominating_trends:
     st.session_state.selected_value = dominating_trends[0]
 
 # --- الشاشة الرئيسية للعرض الديناميكي ---
 if st.session_state.view_mode == 'trend':
-    # وضع عرض ترند الساعة المشترك
     current_trend = st.session_state.selected_value
     st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {current_trend} 】")
     related_items = [item for item in news_data if current_trend in item['title']][:6]
 else:
-    # وضع عرض مصدر معين بجميع أخباره المستقلة
     current_source = st.session_state.selected_value
     st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {current_source} 】")
     related_items = source_data_dict.get(current_source, [])[:6]
 
-# عرض النتائج والصور في شبكة احترافية من 3 أعمدة
 if related_items:
     cols = st.columns(3)
     for index, item in enumerate(related_items):
