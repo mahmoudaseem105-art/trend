@@ -8,7 +8,7 @@ from PIL import Image
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
 # اسم ملف اللوجو المستضاف في جيت هاب
-LOGO_IMAGE_PATH = "channels4_profile.png" 
+LOGO_IMAGE_PATH = "channels4_profile.jpg" 
 
 def get_resized_logo(width_size=120):
     try:
@@ -80,7 +80,7 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 5. جلب البيانات (رفعنا الحد إلى 30 خبراً لكل مصدر لعرض قائمة طويلة للزائر)
+# 5. جلب البيانات (الوضع المفتوح بالكامل بدون قيود)
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
@@ -89,8 +89,8 @@ def fetch_trending_data():
     for source in ALL_SOURCES:
         try:
             feed = feedparser.parse(source['url'])
-            # سحب 30 خبراً بدلاً من 8 ليكون المصدر ممتلئاً بالأخبار عند اختياره
-            for entry in feed.entries[:30]:
+            # تم إزالة القيود تماماً: سيسحب كل الأخبار التي يتيحها مصدر الـ RSS
+            for entry in feed.entries:
                 item = {
                     "title": entry.title,
                     "link": entry.link,
@@ -114,7 +114,7 @@ def extract_dominating_trends(news_list, top_n=6):
     return [word for word, count in freq.most_common(top_n) if count > 1]
 
 # --- تشغيل الواجهة وجلب البيانات ---
-with st.spinner('⏳ جاري تحديث الرادار ومسح الـ 24 منصة...'):
+with st.spinner('⏳ جاري تحديث الرادار ومسح الـ 24 منصة للحد الأقصى...'):
     news_data, source_data_dict = fetch_trending_data()
 
 # --- إعدادات السحاب الجانبي (Sidebar) ---
@@ -143,7 +143,7 @@ if dominating_trends:
 
 st.sidebar.divider()
 
-# --- القائمة الثانية: غرف ومصادر الأخبار الحية المضيئة ---
+# --- القائمة الثانية: غرف ومصادر الأخبار الحية ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
     display_name = f"🟢 {source['name']}"
@@ -158,16 +158,16 @@ if st.session_state.selected_value == "" and dominating_trends:
 if st.session_state.view_mode == 'trend':
     current_trend = st.session_state.selected_value
     st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {current_trend} 】")
-    # في الترند نعرض الأخبار المتعلقة به فقط
     related_items = [item for item in news_data if current_trend in item['title']]
 else:
     current_source = st.session_state.selected_value
     st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {current_source} 】")
-    # هنا قمنا بإزالة القيد! سيعرض جميع الأخبار الخاصة بالمصدر (حتى 30 خبراً) للنزول للأسفل
+    # عرض كل الأخبار المتاحة في المصدر بدون استثناء
     related_items = source_data_dict.get(current_source, [])
 
-# عرض النتائج في شبكة غير محدودة (تنزل للأسفل تلقائياً)
+# عرض النتائج
 if related_items:
+    st.write(f"إجمالي الأخبار المتاحة من المصدر حالياً: **{len(related_items)} خبر**")
     cols = st.columns(3)
     for index, item in enumerate(related_items):
         with cols[index % 3]:
