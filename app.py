@@ -8,7 +8,7 @@ from PIL import Image
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
 # اسم ملف اللوجو المستضاف في جيت هاب
-LOGO_IMAGE_PATH = "channels4_profile.png" 
+LOGO_IMAGE_PATH = "channels4_profile.jpg" 
 
 def get_resized_logo(width_size=120):
     try:
@@ -80,7 +80,7 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 5. جلب البيانات (الوضع المفتوح بالكامل بدون قيود)
+# 5. جلب البيانات بالوضع المفتوح
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
@@ -89,7 +89,6 @@ def fetch_trending_data():
     for source in ALL_SOURCES:
         try:
             feed = feedparser.parse(source['url'])
-            # تم إزالة القيود تماماً: سيسحب كل الأخبار التي يتيحها مصدر الـ RSS
             for entry in feed.entries:
                 item = {
                     "title": entry.title,
@@ -102,12 +101,13 @@ def fetch_trending_data():
         except: continue
     return all_news, source_news_dict
 
-# 6. خوارزمية صيد ترند الساعة
+# 6. خوارزمية صيد ترند الساعة (محدثة لاصطياد الكلمات العربية فقط)
 def extract_dominating_trends(news_list, top_n=6):
     words = []
     for item in news_list:
-        clean_text = re.sub(r'[^\w\s]', '', item['title'])
-        for word in clean_text.split():
+        # السر هنا: استخراج الكلمات التي تتكون من حروف عربية فقط وتجاهل الإنجليزية والرموز تماماً
+        arabic_words = re.findall(r'[\u0600-\u06FF]+', item['title'])
+        for word in arabic_words:
             if len(word) > 3 and word not in STOP_WORDS: 
                 words.append(word)
     freq = Counter(words)
@@ -162,12 +162,12 @@ if st.session_state.view_mode == 'trend':
 else:
     current_source = st.session_state.selected_value
     st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {current_source} 】")
-    # عرض كل الأخبار المتاحة في المصدر بدون استثناء
     related_items = source_data_dict.get(current_source, [])
 
 # عرض النتائج
 if related_items:
-    st.write(f"إجمالي الأخبار المتاحة من المصدر حالياً: **{len(related_items)} خبر**")
+    if st.session_state.view_mode == 'source':
+        st.write(f"إجمالي الأخبار المتاحة من المصدر حالياً: **{len(related_items)} خبر**")
     cols = st.columns(3)
     for index, item in enumerate(related_items):
         with cols[index % 3]:
