@@ -69,14 +69,23 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 4. جلب البيانات (مفتوح بالكامل للنزول للأسفل)
+# 4. جلب البيانات (مع قناع التخفي لتخطي حظر السيرفرات)
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
+    
+    # قناع التخفي (Browser Identity) لاختراق الحماية وجلب الأخبار
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+    }
+    
     for source in ALL_SOURCES:
         try:
-            feed = feedparser.parse(source['url'])
+            # نستخدم مكتبة requests بدلاً من feedparser المباشر لتمرير قناع التخفي
+            response = requests.get(source['url'], headers=headers, timeout=15)
+            feed = feedparser.parse(response.content)
+            
             for entry in feed.entries:
                 item = {
                     "title": entry.title,
@@ -90,10 +99,9 @@ def fetch_trending_data():
     return all_news, source_news_dict
 
 # 5. استنتاج الترند بواسطة Groq الذكي
-@st.cache_data(ttl=900) # كاش لمدة 15 دقيقة لتخفيف الضغط على Groq
+@st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
-        # أخذ عينة من 50 عنوان فقط لتقليل استهلاك الكلمات (Tokens) ومنع الحظر
         sample_titles = list(set([item['title'] for item in news_list]))[:50]
         text_block = "\n".join(sample_titles)
         
@@ -120,13 +128,12 @@ def get_trends_from_groq(news_list):
         res = requests.post(url, json=payload, headers=headers, timeout=15)
         if res.status_code == 200:
             content = res.json()['choices'][0]['message']['content'].strip()
-            # تحويل النص المفصول بفاصلة إلى قائمة
             trends = [t.strip() for t in content.split(',') if len(t.strip()) > 2]
             return trends[:6] if trends else None
     except: pass
     return None
 
-# 6. نظام الطوارئ (العد الآلي) في حال فشل Groq
+# 6. نظام الطوارئ
 def get_trends_fallback(news_list):
     STOP_WORDS = set(["على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "بسبب", "حول", "وقد", "أنه", "كما", "ذلك", "فقط", "اليوم", "صور", "فيديو", "عاجل", "تفاصيل"])
     words = []
@@ -141,7 +148,6 @@ def get_trends_fallback(news_list):
 with st.spinner('⏳ جاري مسح الـ 24 منصة وتحليل السياق بالذكاء الاصطناعي (Groq)...'):
     news_data, source_data_dict = fetch_trending_data()
     
-    # محاولة جلب الترند بالذكاء الاصطناعي، وإذا فشل يعمل نظام الطوارئ
     dominating_trends = get_trends_from_groq(news_data)
     if not dominating_trends:
         dominating_trends = get_trends_fallback(news_data)
@@ -161,7 +167,7 @@ if 'view_mode' not in st.session_state:
 if 'selected_value' not in st.session_state:
     st.session_state.selected_value = ""
 
-# --- القائمة الأولى: ترند الساعة (بواسطة Groq) ---
+# --- القائمة الأولى: ترند الساعة ---
 if dominating_trends:
     st.sidebar.subheader("🚨 ترند الساعة (AI)")
     for trend in dominating_trends:
