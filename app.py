@@ -69,23 +69,28 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 4. جلب البيانات (مع قناع التخفي لتخطي حظر السيرفرات)
+# 4. جلب البيانات (مع كاسر الحماية المتطور)
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
     
-    # قناع التخفي (Browser Identity) لاختراق الحماية وجلب الأخبار
+    # رأس اتصال متقدم يحاكي متصفحاً حقيقياً لاختراق حظر rss.app
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        'Referer': 'https://google.com/'
     }
     
     for source in ALL_SOURCES:
         try:
-            # نستخدم مكتبة requests بدلاً من feedparser المباشر لتمرير قناع التخفي
-            response = requests.get(source['url'], headers=headers, timeout=15)
-            feed = feedparser.parse(response.content)
-            
+            # نحاول أولاً باستخدام feedparser مع القناع
+            feed = feedparser.parse(source['url'], agent=headers['User-Agent'])
+            if not feed.entries:
+                # إذا فشل، نستخدم requests كبديل هجومي
+                res = requests.get(source['url'], headers=headers, timeout=10)
+                feed = feedparser.parse(res.content)
+                
             for entry in feed.entries:
                 item = {
                     "title": entry.title,
@@ -98,7 +103,7 @@ def fetch_trending_data():
         except: continue
     return all_news, source_news_dict
 
-# 5. استنتاج الترند بواسطة Groq الذكي
+# 5. استنتاج الترند بواسطة Groq (مع أوامر صارمة بعدم الترجمة)
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
@@ -106,16 +111,18 @@ def get_trends_from_groq(news_list):
         text_block = "\n".join(sample_titles)
         
         prompt = f"""
-        أنت محلل بيانات إخبارية خبير. اقرأ هذه العناوين الإخبارية الحالية:
+        أنت محلل بيانات إخبارية خبير. اقرأ هذه العناوين:
         {text_block}
         
-        استخرج أهم 6 مواضيع أو أسماء شخصيات أو أحداث (ترند) تسيطر على هذه الأخبار.
-        أريد النتيجة كقائمة كلمات فقط مفصولة بفاصلة، باللغة العربية، بدون أي نص إضافي أو شرح.
-        مثال: غزة, الدولار, الأهلي, بايدن, الذهب, الطقس
+        استخرج أهم 6 مواضيع أو أسماء شخصيات تتكرر فيها.
+        شروط هامة جداً:
+        1. أريد النتيجة كقائمة كلمات فقط مفصولة بفاصلة.
+        2. استخرج الكلمة بنفس اللغة المكتوبة بها في العناوين (لا تترجم الكلمات الإنجليزية إلى العربية).
+        3. بدون أي نص إضافي أو شرح.
         """
         
         url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
+        api_headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
@@ -125,7 +132,7 @@ def get_trends_from_groq(news_list):
             "temperature": 0.2
         }
         
-        res = requests.post(url, json=payload, headers=headers, timeout=15)
+        res = requests.post(url, json=payload, headers=api_headers, timeout=15)
         if res.status_code == 200:
             content = res.json()['choices'][0]['message']['content'].strip()
             trends = [t.strip() for t in content.split(',') if len(t.strip()) > 2]
@@ -135,7 +142,7 @@ def get_trends_from_groq(news_list):
 
 # 6. نظام الطوارئ
 def get_trends_fallback(news_list):
-    STOP_WORDS = set(["على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "بسبب", "حول", "وقد", "أنه", "كما", "ذلك", "فقط", "اليوم", "صور", "فيديو", "عاجل", "تفاصيل"])
+    STOP_WORDS = set(["على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "بسبب", "حول", "وقد", "أنه", "كما", "ذلك", "فقط", "اليوم", "صور", "فيديو", "عاجل", "تفاصيل", "أكثر"])
     words = []
     for item in news_list:
         arabic_words = re.findall(r'[\u0600-\u06FF]+', item['title'])
@@ -145,7 +152,7 @@ def get_trends_fallback(news_list):
     return [word for word, count in freq.most_common(6) if count > 1]
 
 # --- تشغيل الواجهة ---
-with st.spinner('⏳ جاري مسح الـ 24 منصة وتحليل السياق بالذكاء الاصطناعي (Groq)...'):
+with st.spinner('⏳ جاري مسح المصادر واصطياد الترندات...'):
     news_data, source_data_dict = fetch_trending_data()
     
     dominating_trends = get_trends_from_groq(news_data)
@@ -177,10 +184,14 @@ if dominating_trends:
 
 st.sidebar.divider()
 
-# --- القائمة الثانية: غرف المصادر ---
+# --- القائمة الثانية: غرف المصادر (مع العداد الحي) ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
-    display_name = f"🟢 {source['name']}"
+    # جلب عدد الأخبار في كل مصدر لعرضه للمستخدم
+    news_count = len(source_data_dict.get(source['name'], []))
+    status_icon = "🟢" if news_count > 0 else "🔴"
+    
+    display_name = f"{status_icon} {source['name']} ({news_count})"
     if st.sidebar.button(display_name, key=f"src_{source['name']}", use_container_width=True):
         st.session_state.view_mode = 'source'
         st.session_state.selected_value = source['name']
@@ -192,7 +203,8 @@ if st.session_state.selected_value == "" and dominating_trends:
 if st.session_state.view_mode == 'trend':
     current_trend = st.session_state.selected_value
     st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {current_trend} 】")
-    related_items = [item for item in news_data if current_trend in item['title']]
+    # بحث مرن (يتجاهل الحروف الكبيرة والصغيرة ليتوافق مع الإنجليزي والعربي)
+    related_items = [item for item in news_data if current_trend.lower() in item['title'].lower()]
 else:
     current_source = st.session_state.selected_value
     st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {current_source} 】")
@@ -209,4 +221,4 @@ if related_items:
             st.markdown(f"[{item['title']}]({item['link']})")
             st.write("---")
 else:
-    st.info("لا توجد أخبار منشورة حالياً تحت هذا التبويب، اختر مصدراً آخر من القائمة.")
+    st.info("لا توجد أخبار منشورة حالياً تحت هذا التبويب. إذا كان العداد بجانب المصدر (0)، فهذا يعني أن المصدر الرئيسي متوقف مؤقتاً.")
