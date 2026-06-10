@@ -9,7 +9,7 @@ from PIL import Image
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
 GROQ_API_KEY = "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"
-LOGO_IMAGE_PATH = "channels4_profile.png" 
+LOGO_IMAGE_PATH = "channels4_profile.jpg" 
 
 def get_resized_logo(width_size=120):
     try:
