@@ -1,13 +1,14 @@
 import streamlit as st
 import feedparser
 import re
+import requests
 from collections import Counter
 from PIL import Image
 
-# 1. إعدادات الصفحة والهوية الرسمية للمنصة
+# 1. إعدادات الصفحة والهوية الرسمية
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
-# اسم ملف اللوجو المستضاف في جيت هاب
+GROQ_API_KEY = "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"
 LOGO_IMAGE_PATH = "channels4_profile.png" 
 
 def get_resized_logo(width_size=120):
@@ -21,19 +22,15 @@ def get_resized_logo(width_size=120):
 
 # --- التنسيق العلوي للمنصة ---
 col_text, col_logo = st.columns([6, 1]) 
-
 with col_logo:
     logo_img = get_resized_logo(width_size=100)
-    if logo_img:
-        st.image(logo_img)
-
+    if logo_img: st.image(logo_img)
 with col_text:
     st.title("🔥 SherifOsmanClub الإخبارية")
-    st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة الأكثر تداولاً وجدلاً على الساحة.")
-
+    st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة بالذكاء الاصطناعي.")
 st.divider()
 
-# 2. بنك المصادر الشامل والكامل (24 مصدراً)
+# 2. بنك المصادر (24 مصدراً)
 ALL_SOURCES = [
     {"name": "المصري اليوم Page", "url": "https://rss.app/feeds/0qilsswhtljm7TpX.xml"},
     {"name": "القاهرة 24 Page", "url": "https://rss.app/feeds/fSxYHaCDdTtQnPcc.xml"},
@@ -61,15 +58,7 @@ ALL_SOURCES = [
     {"name": "BBC News Page", "url": "http://feeds.bbci.co.uk/news/world/rss.xml"}
 ]
 
-# 3. كلمات التوقف لفلترة الشوائب
-STOP_WORDS = set([
-    "على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "الذين", "عبر", "خلال", "بسبب", "حول",
-    "وقد", "أنه", "كما", "ذلك", "وهي", "وهو", "بين", "عندما", "فقط", "وهناك", "عليها", "فيها",
-    "منها", "إليها", "وإن", "وأن", "فإن", "بأن", "اليوم", "أمس", "غدا", "صور", "فيديو", "عاجل",
-    "تفاصيل", "أكثر", "أقل", "أول", "آخر", "أهم", "بعض", "شاهد", "كيف", "لماذا", "متى", "أين"
-])
-
-# 4. دالة استخراج الصور
+# 3. دالة استخراج الصور
 def extract_image_url(entry):
     if hasattr(entry, 'media_content') and len(entry.media_content) > 0:
         return entry.media_content[0]['url']
@@ -80,12 +69,11 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 5. جلب البيانات بالوضع المفتوح
+# 4. جلب البيانات (مفتوح بالكامل للنزول للأسفل)
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
-    
     for source in ALL_SOURCES:
         try:
             feed = feedparser.parse(source['url'])
@@ -101,21 +89,62 @@ def fetch_trending_data():
         except: continue
     return all_news, source_news_dict
 
-# 6. خوارزمية صيد ترند الساعة (محدثة لاصطياد الكلمات العربية فقط)
-def extract_dominating_trends(news_list, top_n=6):
+# 5. استنتاج الترند بواسطة Groq الذكي
+@st.cache_data(ttl=900) # كاش لمدة 15 دقيقة لتخفيف الضغط على Groq
+def get_trends_from_groq(news_list):
+    try:
+        # أخذ عينة من 50 عنوان فقط لتقليل استهلاك الكلمات (Tokens) ومنع الحظر
+        sample_titles = list(set([item['title'] for item in news_list]))[:50]
+        text_block = "\n".join(sample_titles)
+        
+        prompt = f"""
+        أنت محلل بيانات إخبارية خبير. اقرأ هذه العناوين الإخبارية الحالية:
+        {text_block}
+        
+        استخرج أهم 6 مواضيع أو أسماء شخصيات أو أحداث (ترند) تسيطر على هذه الأخبار.
+        أريد النتيجة كقائمة كلمات فقط مفصولة بفاصلة، باللغة العربية، بدون أي نص إضافي أو شرح.
+        مثال: غزة, الدولار, الأهلي, بايدن, الذهب, الطقس
+        """
+        
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2
+        }
+        
+        res = requests.post(url, json=payload, headers=headers, timeout=15)
+        if res.status_code == 200:
+            content = res.json()['choices'][0]['message']['content'].strip()
+            # تحويل النص المفصول بفاصلة إلى قائمة
+            trends = [t.strip() for t in content.split(',') if len(t.strip()) > 2]
+            return trends[:6] if trends else None
+    except: pass
+    return None
+
+# 6. نظام الطوارئ (العد الآلي) في حال فشل Groq
+def get_trends_fallback(news_list):
+    STOP_WORDS = set(["على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "بسبب", "حول", "وقد", "أنه", "كما", "ذلك", "فقط", "اليوم", "صور", "فيديو", "عاجل", "تفاصيل"])
     words = []
     for item in news_list:
-        # السر هنا: استخراج الكلمات التي تتكون من حروف عربية فقط وتجاهل الإنجليزية والرموز تماماً
         arabic_words = re.findall(r'[\u0600-\u06FF]+', item['title'])
         for word in arabic_words:
-            if len(word) > 3 and word not in STOP_WORDS: 
-                words.append(word)
+            if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     freq = Counter(words)
-    return [word for word, count in freq.most_common(top_n) if count > 1]
+    return [word for word, count in freq.most_common(6) if count > 1]
 
-# --- تشغيل الواجهة وجلب البيانات ---
-with st.spinner('⏳ جاري تحديث الرادار ومسح الـ 24 منصة للحد الأقصى...'):
+# --- تشغيل الواجهة ---
+with st.spinner('⏳ جاري مسح الـ 24 منصة وتحليل السياق بالذكاء الاصطناعي (Groq)...'):
     news_data, source_data_dict = fetch_trending_data()
+    
+    # محاولة جلب الترند بالذكاء الاصطناعي، وإذا فشل يعمل نظام الطوارئ
+    dominating_trends = get_trends_from_groq(news_data)
+    if not dominating_trends:
+        dominating_trends = get_trends_fallback(news_data)
 
 # --- إعدادات السحاب الجانبي (Sidebar) ---
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
@@ -132,10 +161,9 @@ if 'view_mode' not in st.session_state:
 if 'selected_value' not in st.session_state:
     st.session_state.selected_value = ""
 
-# --- القائمة الأولى: ترند الساعة ---
-dominating_trends = extract_dominating_trends(news_data)
+# --- القائمة الأولى: ترند الساعة (بواسطة Groq) ---
 if dominating_trends:
-    st.sidebar.subheader("🚨 ترند الساعة")
+    st.sidebar.subheader("🚨 ترند الساعة (AI)")
     for trend in dominating_trends:
         if st.sidebar.button(f"🔥 {trend}", key=f"tr_{trend}", use_container_width=True):
             st.session_state.view_mode = 'trend'
@@ -143,7 +171,7 @@ if dominating_trends:
 
 st.sidebar.divider()
 
-# --- القائمة الثانية: غرف ومصادر الأخبار الحية ---
+# --- القائمة الثانية: غرف المصادر ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
     display_name = f"🟢 {source['name']}"
@@ -154,7 +182,7 @@ for source in ALL_SOURCES:
 if st.session_state.selected_value == "" and dominating_trends:
     st.session_state.selected_value = dominating_trends[0]
 
-# --- الشاشة الرئيسية للعرض الديناميكي ---
+# --- الشاشة الرئيسية للعرض ---
 if st.session_state.view_mode == 'trend':
     current_trend = st.session_state.selected_value
     st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {current_trend} 】")
@@ -164,7 +192,6 @@ else:
     st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {current_source} 】")
     related_items = source_data_dict.get(current_source, [])
 
-# عرض النتائج
 if related_items:
     if st.session_state.view_mode == 'source':
         st.write(f"إجمالي الأخبار المتاحة من المصدر حالياً: **{len(related_items)} خبر**")
@@ -176,4 +203,4 @@ if related_items:
             st.markdown(f"[{item['title']}]({item['link']})")
             st.write("---")
 else:
-    st.info("لا توجد ميديا منشورة حالياً تحت هذا التبويب، اختر مصدراً أو ترنداً آخر من القائمة.")
+    st.info("لا توجد أخبار منشورة حالياً تحت هذا التبويب، اختر مصدراً آخر من القائمة.")
