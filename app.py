@@ -2,6 +2,7 @@ import streamlit as st
 import feedparser
 import re
 import requests
+import urllib.parse
 from collections import Counter
 from PIL import Image
 
@@ -69,29 +70,46 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# 4. جلب البيانات (مع كاسر الحماية المتطور)
+# --- خوارزمية الاختراق لسحب البيانات رغماً عن الحظر ---
+def fetch_feed_robust(url):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    # المحاولة 1: الطريقة العادية كمتصفح
+    try:
+        feed = feedparser.parse(url, agent=headers['User-Agent'])
+        if feed.entries: return feed
+    except: pass
+    
+    # المحاولة 2: عبر طلبات محاكية قوية
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        feed = feedparser.parse(res.content)
+        if feed.entries: return feed
+    except: pass
+    
+    # المحاولة 3: نفق AllOrigins لتخطي الـ IP Ban (الضربة القاضية)
+    try:
+        encoded_url = urllib.parse.quote(url, safe='')
+        proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
+        res = requests.get(proxy_url, headers=headers, timeout=15)
+        feed = feedparser.parse(res.content)
+        if feed.entries: return feed
+    except: pass
+    
+    return None
+
+# 4. جلب البيانات من المصادر
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
     
-    # رأس اتصال متقدم يحاكي متصفحاً حقيقياً لاختراق حظر rss.app
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-        'Referer': 'https://google.com/'
-    }
-    
     for source in ALL_SOURCES:
-        try:
-            # نحاول أولاً باستخدام feedparser مع القناع
-            feed = feedparser.parse(source['url'], agent=headers['User-Agent'])
-            if not feed.entries:
-                # إذا فشل، نستخدم requests كبديل هجومي
-                res = requests.get(source['url'], headers=headers, timeout=10)
-                feed = feedparser.parse(res.content)
-                
-            for entry in feed.entries:
+        feed = fetch_feed_robust(source['url'])
+        if feed and feed.entries:
+            for entry in feed.entries[:30]: # جلب أحدث 30 خبراً للتصفح
                 item = {
                     "title": entry.title,
                     "link": entry.link,
@@ -100,10 +118,9 @@ def fetch_trending_data():
                 }
                 all_news.append(item)
                 source_news_dict[source['name']].append(item)
-        except: continue
     return all_news, source_news_dict
 
-# 5. استنتاج الترند بواسطة Groq (مع أوامر صارمة بعدم الترجمة)
+# 5. استنتاج الترند بواسطة Groq (التعريب الإجباري)
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
@@ -114,11 +131,12 @@ def get_trends_from_groq(news_list):
         أنت محلل بيانات إخبارية خبير. اقرأ هذه العناوين:
         {text_block}
         
-        استخرج أهم 6 مواضيع أو أسماء شخصيات تتكرر فيها.
-        شروط هامة جداً:
+        استخرج أهم 6 مواضيع أو أحداث (ترند) تسيطر على هذه الأخبار.
+        شروط عسكرية صارمة جداً:
         1. أريد النتيجة كقائمة كلمات فقط مفصولة بفاصلة.
-        2. استخرج الكلمة بنفس اللغة المكتوبة بها في العناوين (لا تترجم الكلمات الإنجليزية إلى العربية).
-        3. بدون أي نص إضافي أو شرح.
+        2. يجب أن تكون الكلمات باللغة العربية حصراً! إذا كان الحدث أجنبياً (مثال: Trump أو Biden)، قم بترجمة اسم الترند للعربية فوراً (ترامب، بايدن).
+        3. لا تضع أي كلمة إنجليزية أبداً.
+        4. بدون أي نص إضافي أو شرح.
         """
         
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -140,7 +158,7 @@ def get_trends_from_groq(news_list):
     except: pass
     return None
 
-# 6. نظام الطوارئ
+# 6. نظام الطوارئ للمصادر العربية
 def get_trends_fallback(news_list):
     STOP_WORDS = set(["على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "بسبب", "حول", "وقد", "أنه", "كما", "ذلك", "فقط", "اليوم", "صور", "فيديو", "عاجل", "تفاصيل", "أكثر"])
     words = []
@@ -152,7 +170,7 @@ def get_trends_fallback(news_list):
     return [word for word, count in freq.most_common(6) if count > 1]
 
 # --- تشغيل الواجهة ---
-with st.spinner('⏳ جاري مسح المصادر واصطياد الترندات...'):
+with st.spinner('⏳ جاري كسر الحظر عن المصادر واصطياد الترندات بالذكاء الاصطناعي...'):
     news_data, source_data_dict = fetch_trending_data()
     
     dominating_trends = get_trends_from_groq(news_data)
@@ -187,7 +205,6 @@ st.sidebar.divider()
 # --- القائمة الثانية: غرف المصادر (مع العداد الحي) ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
-    # جلب عدد الأخبار في كل مصدر لعرضه للمستخدم
     news_count = len(source_data_dict.get(source['name'], []))
     status_icon = "🟢" if news_count > 0 else "🔴"
     
@@ -203,7 +220,6 @@ if st.session_state.selected_value == "" and dominating_trends:
 if st.session_state.view_mode == 'trend':
     current_trend = st.session_state.selected_value
     st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {current_trend} 】")
-    # بحث مرن (يتجاهل الحروف الكبيرة والصغيرة ليتوافق مع الإنجليزي والعربي)
     related_items = [item for item in news_data if current_trend.lower() in item['title'].lower()]
 else:
     current_source = st.session_state.selected_value
