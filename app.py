@@ -2,7 +2,6 @@ import streamlit as st
 import feedparser
 import re
 import requests
-import urllib.parse
 from collections import Counter
 from PIL import Image
 
@@ -31,21 +30,21 @@ with col_text:
     st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة.")
 st.divider()
 
-# 2. بنك المصادر (تم استبدال rss.app بالروابط الرسمية المباشرة!)
+# 2. بنك المصادر (خدعة محرك أخبار جوجل لتخطي حظر Cloudflare 100%)
 ALL_SOURCES = [
-    {"name": "المصري اليوم", "url": "https://www.almasryalyoum.com/rss/rss"},
-    {"name": "اليوم السابع", "url": "https://www.youm7.com/rss/SectionRss?SectionID=65"},
-    {"name": "القاهرة 24", "url": "https://www.cairo24.com/rss"},
-    {"name": "صدى البلد", "url": "https://www.elbalad.news/rss.aspx"},
-    {"name": "الشروق", "url": "https://www.shorouknews.com/rss/home.aspx"},
-    {"name": "الوفد", "url": "https://alwafd.news/rss"},
-    {"name": "عربي 21", "url": "https://arabi21.com/rss"},
-    {"name": "عربي بوست", "url": "https://arabicpost.net/feed/"},
-    {"name": "الشرق الأوسط", "url": "https://aawsat.com/feed"},
-    {"name": "الجزيرة", "url": "https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9"},
+    {"name": "المصري اليوم", "url": "https://news.google.com/rss/search?q=site:almasryalyoum.com&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "اليوم السابع", "url": "https://news.google.com/rss/search?q=site:youm7.com&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "القاهرة 24", "url": "https://news.google.com/rss/search?q=site:cairo24.com&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "صدى البلد", "url": "https://news.google.com/rss/search?q=site:elbalad.news&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "الشروق", "url": "https://news.google.com/rss/search?q=site:shorouknews.com&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "الوفد", "url": "https://news.google.com/rss/search?q=site:alwafd.news&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "عربي 21", "url": "https://news.google.com/rss/search?q=site:arabi21.com&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "الشرق الأوسط", "url": "https://news.google.com/rss/search?q=site:aawsat.com&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "الجزيرة", "url": "https://news.google.com/rss/search?q=site:aljazeera.net&hl=ar&gl=EG&ceid=EG:ar"},
+    {"name": "عربي بوست", "url": "https://news.google.com/rss/search?q=site:arabicpost.net&hl=ar&gl=EG&ceid=EG:ar"},
     {"name": "BBC عربي", "url": "http://feeds.bbci.co.uk/arabic/rss.xml"},
     {"name": "روسيا اليوم", "url": "https://arabic.rt.com/rss/"},
-    {"name": "العربية نت", "url": "https://www.alarabiya.net/.mrss/ar/latest-news.xml"},
+    {"name": "العربية نت", "url": "https://news.google.com/rss/search?q=site:alarabiya.net&hl=ar&gl=EG&ceid=EG:ar"},
     {"name": "The Guardian", "url": "https://www.theguardian.com/world/rss"}
 ]
 
@@ -75,8 +74,10 @@ def fetch_trending_data():
         feed = fetch_feed_robust(source['url'])
         if feed and feed.entries:
             for entry in feed.entries[:30]:
+                # تنظيف العنوان من اسم الجريدة الذي يضيفه جوجل تلقائياً
+                clean_title = re.sub(r' - [^-]+$', '', entry.title).strip()
                 item = {
-                    "title": entry.title, "link": entry.link,
+                    "title": clean_title, "link": entry.link,
                     "source": source['name'], "image": extract_image_url(entry)
                 }
                 all_news.append(item)
@@ -115,7 +116,7 @@ def get_trends_fallback(news_list):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-with st.spinner('⏳ جاري جلب الأخبار من المصادر الرسمية...'):
+with st.spinner('⏳ جاري جلب الأخبار وتخطي حماية السيرفرات...'):
     news_data, source_data_dict = fetch_trending_data()
     dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
