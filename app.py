@@ -1,8 +1,6 @@
 import streamlit as st
-import feedparser
 import re
 import requests
-import urllib.parse
 from collections import Counter
 from PIL import Image
 
@@ -27,7 +25,7 @@ with col_logo:
     if logo_img: st.image(logo_img)
 with col_text:
     st.title("🔥 SherifOsmanClub الإخبارية")
-    st.markdown("الرادار المستقل للأخبار العاجلة والنبض الحقيقي للسوشيال ميديا.")
+    st.markdown("الرادار المستقل للأخبار العاجلة والنبض الحقيقي للسوشيال ميديا (قراءة مباشرة).")
 st.divider()
 
 # 2. مصادرك الخاصة (مربوطة بمعرفات قنوات التليجرام الرسمية)
@@ -58,37 +56,51 @@ ALL_SOURCES = [
     {"name": "الحدث", "handle": "alhadath"}
 ]
 
-# قائمة سيرفرات RSSHub المفتوحة (إذا تعطل واحد، يعمل الآخر تلقائياً)
-RSSHUB_INSTANCES = [
-    "https://rsshub.app",
-    "https://rsshub.rssforever.com",
-    "https://rsshub.feedox.com"
-]
-
-def extract_image_url(entry):
-    if hasattr(entry, 'media_content') and len(entry.media_content) > 0: return entry.media_content[0]['url']
-    if hasattr(entry, 'summary'):
-        match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.summary)
-        if match: return match.group(1)
-    if hasattr(entry, 'description'):
-        match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.description)
-        if match: return match.group(1)
-    return "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=500&q=80"
-
-# --- جلب البيانات مع نظام التنقل بين سيرفرات RSSHub ---
-def fetch_feed_robust(channel_handle):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
-    
-    for instance in RSSHUB_INSTANCES:
-        url = f"{instance}/telegram/channel/{channel_handle}"
-        try:
-            res = requests.get(url, headers=headers, timeout=8)
-            f = feedparser.parse(res.content)
-            if f.entries: 
-                return f
-        except: 
-            continue
-    return None
+# --- 3. محرك اختراق تليجرام المباشر (بديل الـ RSS) ---
+# هذا الكود يقرأ من تليجرام مباشرة كأنه إنسان ويتجاهل كل الوسطاء
+def fetch_telegram_direct(handle, source_name):
+    url = f"https://t.me/s/{handle}" # واجهة تليجرام العامة للويب
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+    }
+    items = []
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code != 200: return []
+        
+        # تقسيم كود الصفحة إلى بلوكات (كل بوست في بلوك)
+        blocks = res.text.split('tgme_widget_message_wrap js-widget_message_wrap')[1:]
+        
+        # قراءة البوستات من الأحدث للأقدم
+        for block in reversed(blocks):
+            # 1. استخراج النص
+            text_match = re.search(r'<div class="tgme_widget_message_text[^>]*>(.*?)</div>', block, re.DOTALL)
+            if not text_match: continue
+            
+            raw_text = text_match.group(1)
+            clean_text = re.sub(r'<br/?>', ' | ', raw_text) # تحويل النزول لسطر إلى فاصل
+            clean_text = re.sub(r'<[^>]+>', '', clean_text).strip() # إزالة أكواد HTML
+            if len(clean_text) < 15: continue # تجاهل البوستات القصيرة جداً
+            
+            # 2. استخراج الصورة إن وجدت
+            img_match = re.search(r"background-image:url\('([^']+)'\)", block)
+            image_url = img_match.group(1) if img_match else "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=500&q=80"
+            
+            # 3. استخراج رابط البوست الأصلي
+            link_match = re.search(r'href="(https://t.me/[^"]+/\d+)"', block)
+            post_link = link_match.group(1) if link_match else url
+            
+            items.append({
+                "title": clean_text[:130] + "..." if len(clean_text) > 130 else clean_text,
+                "link": post_link,
+                "source": source_name,
+                "image": image_url
+            })
+            
+            if len(items) >= 20: break # جلب أحدث 20 بوست من كل قناة
+        return items
+    except:
+        return []
 
 @st.cache_data(ttl=300) # التحديث كل 5 دقائق
 def fetch_trending_data():
@@ -96,22 +108,15 @@ def fetch_trending_data():
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
     
     for source in ALL_SOURCES:
-        feed = fetch_feed_robust(source['handle'])
-        if feed and feed.entries:
-            for entry in feed.entries[:25]: # جلب 25 بوست من كل قناة تليجرام
-                # تنظيف البوستات لتكون عناوين أنيقة
-                clean_title = re.sub(r'<[^>]+>', '', entry.title).strip()
-                if len(clean_title) > 100: clean_title = clean_title[:100] + "..."
-                
-                item = {
-                    "title": clean_title, "link": entry.link,
-                    "source": source['name'], "image": extract_image_url(entry)
-                }
-                all_news.append(item)
-                source_news_dict[source['name']].append(item)
+        # استخدام المحرك المباشر بدلاً من RSSHub
+        channel_items = fetch_telegram_direct(source['handle'], source['name'])
+        if channel_items:
+            all_news.extend(channel_items)
+            source_news_dict[source['name']] = channel_items
+            
     return all_news, source_news_dict
 
-# --- Groq الذكي بأوامر صارمة لاستخراج الكلمات المفردة للترند ---
+# --- 4. Groq الذكي (الترندات المفلترة بصرامة) ---
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
@@ -121,10 +126,11 @@ def get_trends_from_groq(news_list):
         {" | ".join(sample_titles)}
         
         استخرج أهم 6 ترندات حالية. 
-        شروط التنفيذ عسكرية صارمة:
-        1. كل ترند يجب أن يكون (كلمة واحدة فقط)، إما اسم شخص، دولة، أو حدث ساخن.
+        شروط عسكرية صارمة جداً:
+        1. كل ترند يجب أن يكون (كلمة واحدة فقط)، إما اسم شخص، دولة، أو حدث.
         2. ممنوع منعاً باتاً استخدام أي أفعال أو جمل.
-        3. النتائج مفصولة بفاصلة عربية (،) فقط، بدون أي كلام إضافي.
+        3. النتائج مفصولة بفاصلة عربية (،) فقط، بدون أي شرح أو ترقيم.
+        مثال للرد الصحيح: الأهلي، غزة، الدولار، ترامب، بايدن، الزمالك
         """
         res = requests.post("https://api.groq.com/openai/v1/chat/completions", 
                             json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}, 
@@ -144,7 +150,8 @@ def get_trends_fallback(news_list):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-with st.spinner('⏳ جاري مسح قنوات التليجرام والسوشيال ميديا...'):
+# --- 5. تشغيل واجهة المستخدم ---
+with st.spinner('⏳ جاري سحب البيانات مباشرة من سيرفرات تليجرام (بدون وسطاء)...'):
     news_data, source_data_dict = fetch_trending_data()
     dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
@@ -180,11 +187,11 @@ else:
     related_items = source_data_dict.get(st.session_state.selected_value, [])
 
 if related_items:
-    if st.session_state.view_mode == 'source': st.write(f"إجمالي الأخبار: **{len(related_items)} خبر**")
+    if st.session_state.view_mode == 'source': st.write(f"إجمالي المنشورات المتاحة: **{len(related_items)} بوست**")
     cols = st.columns(3)
     for i, item in enumerate(related_items):
         with cols[i % 3]:
             st.image(item['image'], use_container_width=True)
             st.markdown(f"**{item['source']}**\n\n[{item['title']}]({item['link']})\n---")
 else:
-    st.info("لا توجد ميديا مطابقة. الرادار يقوم بالتحديث المستمر لشبكات السوشيال ميديا.")
+    st.info("لم يتم العثور على بوستات. تأكد من أن القناة نشطة على تليجرام.")
