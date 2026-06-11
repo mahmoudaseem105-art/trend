@@ -30,32 +30,39 @@ with col_text:
     st.markdown("الرادار المستقل للأخبار العاجلة والنبض الحقيقي للسوشيال ميديا.")
 st.divider()
 
-# 2. مصادرك الخاصة (مربوطة بقنوات السوشيال ميديا/تليجرام الرسمية لتحديثات لحظية)
+# 2. مصادرك الخاصة (مربوطة بمعرفات قنوات التليجرام الرسمية)
 ALL_SOURCES = [
-    {"name": "شبكة رصد (سوشيال)", "url": "https://rsshub.app/telegram/channel/rassd_egypt"},
-    {"name": "القاهرة 24 (سوشيال)", "url": "https://rsshub.app/telegram/channel/cairo24_news"},
-    {"name": "اليوم السابع (سوشيال)", "url": "https://rsshub.app/telegram/channel/Youm7"},
-    {"name": "المصري اليوم (سوشيال)", "url": "https://rsshub.app/telegram/channel/almasryalyoum"},
-    {"name": "إيكاد Eekad (سوشيال)", "url": "https://rsshub.app/telegram/channel/EekadFacts"},
-    {"name": "عربي 21 (سوشيال)", "url": "https://rsshub.app/telegram/channel/Arabi21News"},
-    {"name": "مدى مصر (سوشيال)", "url": "https://rsshub.app/telegram/channel/MadaMasr"},
-    {"name": "عربي بوست (سوشيال)", "url": "https://rsshub.app/telegram/channel/Arabic_Post"},
-    {"name": "مزيد (سوشيال)", "url": "https://rsshub.app/telegram/channel/Mazeeed"},
-    {"name": "تليجراف مصر (سوشيال)", "url": "https://rsshub.app/telegram/channel/telegraph_egypt"},
-    {"name": "صدى البلد (سوشيال)", "url": "https://rsshub.app/telegram/channel/ElBaladOfficial"},
-    {"name": "الجزيرة مصر (سوشيال)", "url": "https://rsshub.app/telegram/channel/AJA_Egypt"},
-    {"name": "الجزيرة عاجل (سوشيال)", "url": "https://rsshub.app/telegram/channel/AJA_News"},
-    {"name": "الشرق الأوسط (سوشيال)", "url": "https://rsshub.app/telegram/channel/aawsat_news"},
-    {"name": "حقوق الإنسان (سوشيال)", "url": "https://rsshub.app/telegram/channel/AmnestyAR"},
-    {"name": "العربية عاجل (سوشيال)", "url": "https://rsshub.app/telegram/channel/Alarabiya_Brk"},
-    {"name": "سكاي نيوز (سوشيال)", "url": "https://rsshub.app/telegram/channel/SkyNewsArabia_B"},
-    {"name": "بي بي سي عربي (سوشيال)", "url": "https://rsshub.app/telegram/channel/bbcarabic"},
-    {"name": "روسيا اليوم (سوشيال)", "url": "https://rsshub.app/telegram/channel/RTarabic_News"},
-    {"name": "العربي الجديد (سوشيال)", "url": "https://rsshub.app/telegram/channel/alaraby_ar"},
-    {"name": "قناة الشرق (سوشيال)", "url": "https://rsshub.app/telegram/channel/ElsharqTV"},
-    {"name": "مكملين (سوشيال)", "url": "https://rsshub.app/telegram/channel/mekameeleen"},
-    {"name": "The Guardian (Social)", "url": "https://rsshub.app/telegram/channel/guardian"},
-    {"name": "حدث بالفعل", "url": "https://news.google.com/rss/search?q=site:hadathbelfael.com"}
+    {"name": "شبكة رصد", "handle": "rassd_egypt"},
+    {"name": "القاهرة 24", "handle": "cairo24_news"},
+    {"name": "اليوم السابع", "handle": "Youm7"},
+    {"name": "المصري اليوم", "handle": "almasryalyoum"},
+    {"name": "إيكاد Eekad", "handle": "EekadFacts"},
+    {"name": "عربي 21", "handle": "Arabi21News"},
+    {"name": "مدى مصر", "handle": "MadaMasr"},
+    {"name": "عربي بوست", "handle": "Arabic_Post"},
+    {"name": "مزيد", "handle": "Mazeeed"},
+    {"name": "تليجراف مصر", "handle": "telegraph_egypt"},
+    {"name": "صدى البلد", "handle": "ElBaladOfficial"},
+    {"name": "الجزيرة مصر", "handle": "AJA_Egypt"},
+    {"name": "الجزيرة عاجل", "handle": "AJA_News"},
+    {"name": "الشرق الأوسط", "handle": "aawsat_news"},
+    {"name": "حقوق الإنسان", "handle": "AmnestyAR"},
+    {"name": "العربية عاجل", "handle": "Alarabiya_Brk"},
+    {"name": "سكاي نيوز", "handle": "SkyNewsArabia_B"},
+    {"name": "بي بي سي عربي", "handle": "bbcarabic"},
+    {"name": "روسيا اليوم", "handle": "RTarabic_News"},
+    {"name": "العربي الجديد", "handle": "alaraby_ar"},
+    {"name": "قناة الشرق", "handle": "ElsharqTV"},
+    {"name": "مكملين", "handle": "mekameeleen"},
+    {"name": "تغطية غزة", "handle": "GazaNewsNow"},
+    {"name": "الحدث", "handle": "alhadath"}
+]
+
+# قائمة سيرفرات RSSHub المفتوحة (إذا تعطل واحد، يعمل الآخر تلقائياً)
+RSSHUB_INSTANCES = [
+    "https://rsshub.app",
+    "https://rsshub.rssforever.com",
+    "https://rsshub.feedox.com"
 ]
 
 def extract_image_url(entry):
@@ -68,34 +75,31 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=500&q=80"
 
-# --- جلب البيانات مع نفق بروكسي للحماية ---
-def fetch_feed_robust(url):
+# --- جلب البيانات مع نظام التنقل بين سيرفرات RSSHub ---
+def fetch_feed_robust(channel_handle):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        f = feedparser.parse(res.content)
-        if f.entries: return f
-    except: pass
     
-    # نفق بديل لضمان عدم توقف السوشيال ميديا
-    try:
-        encoded_url = urllib.parse.quote(url, safe='')
-        proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
-        res = requests.get(proxy_url, headers=headers, timeout=15)
-        f = feedparser.parse(res.content)
-        if f.entries: return f
-    except: pass
+    for instance in RSSHUB_INSTANCES:
+        url = f"{instance}/telegram/channel/{channel_handle}"
+        try:
+            res = requests.get(url, headers=headers, timeout=8)
+            f = feedparser.parse(res.content)
+            if f.entries: 
+                return f
+        except: 
+            continue
     return None
 
-@st.cache_data(ttl=300) # التحديث كل 5 دقائق لسرعة السوشيال ميديا
+@st.cache_data(ttl=300) # التحديث كل 5 دقائق
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
+    
     for source in ALL_SOURCES:
-        feed = fetch_feed_robust(source['url'])
+        feed = fetch_feed_robust(source['handle'])
         if feed and feed.entries:
-            for entry in feed.entries[:25]:
-                # تنظيف نصوص التليجرام لتبدو كعناوين أنيقة
+            for entry in feed.entries[:25]: # جلب 25 بوست من كل قناة تليجرام
+                # تنظيف البوستات لتكون عناوين أنيقة
                 clean_title = re.sub(r'<[^>]+>', '', entry.title).strip()
                 if len(clean_title) > 100: clean_title = clean_title[:100] + "..."
                 
@@ -107,27 +111,26 @@ def fetch_trending_data():
                 source_news_dict[source['name']].append(item)
     return all_news, source_news_dict
 
-# --- Groq الذكي بأوامر عسكرية صارمة للترند ---
+# --- Groq الذكي بأوامر صارمة لاستخراج الكلمات المفردة للترند ---
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
         sample_titles = list(set([item['title'] for item in news_list]))[:60]
         prompt = f"""
-        اقرأ هذه العناوين الإخبارية من السوشيال ميديا:
+        اقرأ هذه المنشورات الإخبارية من السوشيال ميديا:
         {" | ".join(sample_titles)}
         
         استخرج أهم 6 ترندات حالية. 
-        شروط التنفيذ عسكرية:
-        1. كل ترند يجب أن يكون (كلمة واحدة فقط)، إما اسم شخص (مثل: بايدن)، دولة (مثل: مصر)، أو حدث (مثل: الدولار).
-        2. ممنوع منعاً باتاً استخدام أي أفعال أو جمل طويلة.
-        3. النتائج مفصولة بفاصلة عربية (،) فقط.
+        شروط التنفيذ عسكرية صارمة:
+        1. كل ترند يجب أن يكون (كلمة واحدة فقط)، إما اسم شخص، دولة، أو حدث ساخن.
+        2. ممنوع منعاً باتاً استخدام أي أفعال أو جمل.
+        3. النتائج مفصولة بفاصلة عربية (،) فقط، بدون أي كلام إضافي.
         """
         res = requests.post("https://api.groq.com/openai/v1/chat/completions", 
                             json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}, 
                             headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, timeout=15)
         if res.status_code == 200:
             content = res.json()['choices'][0]['message']['content'].strip()
-            # استخراج الكلمات المفردة فقط بدقة
             trends = [t.strip() for t in re.split(r'[,،\-]', content) if len(t.strip()) > 2 and len(t.split()) <= 2]
             return trends[:6] if trends else None
     except: pass
@@ -141,7 +144,7 @@ def get_trends_fallback(news_list):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-with st.spinner('⏳ جاري مسح قنوات السوشيال ميديا وتفريغ البيانات...'):
+with st.spinner('⏳ جاري مسح قنوات التليجرام والسوشيال ميديا...'):
     news_data, source_data_dict = fetch_trending_data()
     dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
