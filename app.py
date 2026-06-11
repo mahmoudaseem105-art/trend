@@ -6,7 +6,7 @@ import urllib.parse
 from collections import Counter
 from PIL import Image
 
-# 1. إعدادات الصفحة والهوية الرسمية
+# 1. إعدادات الصفحة
 st.set_page_config(page_title="SherifOsmanClub الإخبارية", page_icon="🔥", layout="wide")
 
 GROQ_API_KEY = "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"
@@ -21,17 +21,17 @@ def get_resized_logo(width_size=120):
     except:
         return None
 
-# --- التنسيق العلوي للمنصة ---
+# --- التنسيق العلوي ---
 col_text, col_logo = st.columns([6, 1]) 
 with col_logo:
     logo_img = get_resized_logo(width_size=100)
     if logo_img: st.image(logo_img)
 with col_text:
     st.title("🔥 SherifOsmanClub الإخبارية")
-    st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة بالذكاء الاصطناعي.")
+    st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة.")
 st.divider()
 
-# 2. بنك المصادر (24 مصدراً)
+# 2. بنك المصادر
 ALL_SOURCES = [
     {"name": "المصري اليوم Page", "url": "https://rss.app/feeds/0qilsswhtljm7TpX.xml"},
     {"name": "القاهرة 24 Page", "url": "https://rss.app/feeds/fSxYHaCDdTtQnPcc.xml"},
@@ -59,182 +59,126 @@ ALL_SOURCES = [
     {"name": "BBC News Page", "url": "http://feeds.bbci.co.uk/news/world/rss.xml"}
 ]
 
-# 3. دالة استخراج الصور
 def extract_image_url(entry):
-    if hasattr(entry, 'media_content') and len(entry.media_content) > 0:
-        return entry.media_content[0]['url']
-    if hasattr(entry, 'enclosures') and len(entry.enclosures) > 0:
-        return entry.enclosures[0]['href']
+    if hasattr(entry, 'media_content') and len(entry.media_content) > 0: return entry.media_content[0]['url']
+    if hasattr(entry, 'enclosures') and len(entry.enclosures) > 0: return entry.enclosures[0]['href']
     if hasattr(entry, 'summary'):
         match = re.search(r'<img[^>]+src="([^">]+)"', entry.summary)
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# --- خوارزمية الاختراق لسحب البيانات رغماً عن الحظر ---
+# --- شبكة البروكسي الثقيلة لاختراق حظر rss.app ---
 def fetch_feed_robust(url):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+    encoded_url = urllib.parse.quote(url, safe='')
     
-    # المحاولة 1: الطريقة العادية كمتصفح
+    # 1. الاتصال المباشر
     try:
-        feed = feedparser.parse(url, agent=headers['User-Agent'])
-        if feed.entries: return feed
+        f = feedparser.parse(url, agent=headers['User-Agent'])
+        if f.entries: return f
     except: pass
-    
-    # المحاولة 2: عبر طلبات محاكية قوية
+    # 2. نفق Codetabs
     try:
-        res = requests.get(url, headers=headers, timeout=10)
-        feed = feedparser.parse(res.content)
-        if feed.entries: return feed
+        f = feedparser.parse(f"https://api.codetabs.com/v1/proxy?quest={url}")
+        if f.entries: return f
     except: pass
-    
-    # المحاولة 3: نفق AllOrigins لتخطي الـ IP Ban (الضربة القاضية)
+    # 3. نفق Corsproxy
     try:
-        encoded_url = urllib.parse.quote(url, safe='')
-        proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
-        res = requests.get(proxy_url, headers=headers, timeout=15)
-        feed = feedparser.parse(res.content)
-        if feed.entries: return feed
+        f = feedparser.parse(f"https://corsproxy.io/?{encoded_url}")
+        if f.entries: return f
     except: pass
     
     return None
 
-# 4. جلب البيانات من المصادر
 @st.cache_data(ttl=600)
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
-    
     for source in ALL_SOURCES:
         feed = fetch_feed_robust(source['url'])
         if feed and feed.entries:
-            for entry in feed.entries[:30]: # جلب أحدث 30 خبراً للتصفح
+            for entry in feed.entries[:30]:
                 item = {
-                    "title": entry.title,
-                    "link": entry.link,
-                    "source": source['name'],
-                    "image": extract_image_url(entry)
+                    "title": entry.title, "link": entry.link,
+                    "source": source['name'], "image": extract_image_url(entry)
                 }
                 all_news.append(item)
                 source_news_dict[source['name']].append(item)
     return all_news, source_news_dict
 
-# 5. استنتاج الترند بواسطة Groq (التعريب الإجباري)
+# --- Groq مع التحديث الذكي لتقطيع الكلمات (حل الفاصلة العربية) ---
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
         sample_titles = list(set([item['title'] for item in news_list]))[:50]
-        text_block = "\n".join(sample_titles)
-        
         prompt = f"""
-        أنت محلل بيانات إخبارية خبير. اقرأ هذه العناوين:
-        {text_block}
+        استخرج أهم 6 مواضيع أو أحداث (ترند) من هذه العناوين:
+        {" | ".join(sample_titles)}
         
-        استخرج أهم 6 مواضيع أو أحداث (ترند) تسيطر على هذه الأخبار.
-        شروط عسكرية صارمة جداً:
-        1. أريد النتيجة كقائمة كلمات فقط مفصولة بفاصلة.
-        2. يجب أن تكون الكلمات باللغة العربية حصراً! إذا كان الحدث أجنبياً (مثال: Trump أو Biden)، قم بترجمة اسم الترند للعربية فوراً (ترامب، بايدن).
-        3. لا تضع أي كلمة إنجليزية أبداً.
-        4. بدون أي نص إضافي أو شرح.
+        شروط:
+        1. النتيجة كلمات فقط مفصولة بفاصلة.
+        2. عربية حصراً.
+        3. بدون أي شرح.
         """
-        
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        api_headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2
-        }
-        
-        res = requests.post(url, json=payload, headers=api_headers, timeout=15)
+        res = requests.post("https://api.groq.com/openai/v1/chat/completions", 
+                            json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "temperature": 0.2}, 
+                            headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, timeout=15)
         if res.status_code == 200:
             content = res.json()['choices'][0]['message']['content'].strip()
-            trends = [t.strip() for t in content.split(',') if len(t.strip()) > 2]
+            # هنا السحر: القص باستخدام الفاصلة الإنجليزية (,) أو العربية (،) أو الخط (-)
+            trends = [t.strip() for t in re.split(r'[,،\-]', content) if len(t.strip()) > 2]
             return trends[:6] if trends else None
     except: pass
     return None
 
-# 6. نظام الطوارئ للمصادر العربية
 def get_trends_fallback(news_list):
     STOP_WORDS = set(["على", "إلى", "عن", "هذا", "هذه", "التي", "الذي", "بسبب", "حول", "وقد", "أنه", "كما", "ذلك", "فقط", "اليوم", "صور", "فيديو", "عاجل", "تفاصيل", "أكثر"])
     words = []
     for item in news_list:
-        arabic_words = re.findall(r'[\u0600-\u06FF]+', item['title'])
-        for word in arabic_words:
+        for word in re.findall(r'[\u0600-\u06FF]+', item['title']):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
-    freq = Counter(words)
-    return [word for word, count in freq.most_common(6) if count > 1]
+    return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-# --- تشغيل الواجهة ---
-with st.spinner('⏳ جاري كسر الحظر عن المصادر واصطياد الترندات بالذكاء الاصطناعي...'):
+with st.spinner('⏳ جاري تخطي الحماية ومسح المصادر...'):
     news_data, source_data_dict = fetch_trending_data()
-    
-    dominating_trends = get_trends_from_groq(news_data)
-    if not dominating_trends:
-        dominating_trends = get_trends_fallback(news_data)
+    dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
-# --- إعدادات السحاب الجانبي (Sidebar) ---
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
-sidebar_logo = get_resized_logo(width_size=80)
-if sidebar_logo:
-    side_col1, side_col2, side_col3 = st.sidebar.columns([1, 2, 1])
-    with side_col2: st.image(sidebar_logo)
-
+if sidebar_logo := get_resized_logo(width_size=80):
+    st.sidebar.columns([1, 2, 1])[1].image(sidebar_logo)
 st.sidebar.markdown("<h3 style='text-align: center; margin-top: -5px;'>SherifOsmanClub</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
 
-if 'view_mode' not in st.session_state:
-    st.session_state.view_mode = 'trend'
-if 'selected_value' not in st.session_state:
-    st.session_state.selected_value = ""
+if 'view_mode' not in st.session_state: st.session_state.update({'view_mode': 'trend', 'selected_value': ""})
 
-# --- القائمة الأولى: ترند الساعة ---
 if dominating_trends:
     st.sidebar.subheader("🚨 ترند الساعة (AI)")
     for trend in dominating_trends:
         if st.sidebar.button(f"🔥 {trend}", key=f"tr_{trend}", use_container_width=True):
-            st.session_state.view_mode = 'trend'
-            st.session_state.selected_value = trend
-
+            st.session_state.update({'view_mode': 'trend', 'selected_value': trend})
 st.sidebar.divider()
 
-# --- القائمة الثانية: غرف المصادر (مع العداد الحي) ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
     news_count = len(source_data_dict.get(source['name'], []))
-    status_icon = "🟢" if news_count > 0 else "🔴"
-    
-    display_name = f"{status_icon} {source['name']} ({news_count})"
-    if st.sidebar.button(display_name, key=f"src_{source['name']}", use_container_width=True):
-        st.session_state.view_mode = 'source'
-        st.session_state.selected_value = source['name']
+    if st.sidebar.button(f"{'🟢' if news_count > 0 else '🔴'} {source['name']} ({news_count})", key=f"src_{source['name']}", use_container_width=True):
+        st.session_state.update({'view_mode': 'source', 'selected_value': source['name']})
 
-if st.session_state.selected_value == "" and dominating_trends:
-    st.session_state.selected_value = dominating_trends[0]
+if st.session_state.selected_value == "" and dominating_trends: st.session_state.selected_value = dominating_trends[0]
 
-# --- الشاشة الرئيسية للعرض ---
 if st.session_state.view_mode == 'trend':
-    current_trend = st.session_state.selected_value
-    st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {current_trend} 】")
-    related_items = [item for item in news_data if current_trend.lower() in item['title'].lower()]
+    st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {st.session_state.selected_value} 】")
+    related_items = [item for item in news_data if st.session_state.selected_value.lower() in item['title'].lower()]
 else:
-    current_source = st.session_state.selected_value
-    st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {current_source} 】")
-    related_items = source_data_dict.get(current_source, [])
+    st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {st.session_state.selected_value} 】")
+    related_items = source_data_dict.get(st.session_state.selected_value, [])
 
 if related_items:
-    if st.session_state.view_mode == 'source':
-        st.write(f"إجمالي الأخبار المتاحة من المصدر حالياً: **{len(related_items)} خبر**")
+    if st.session_state.view_mode == 'source': st.write(f"إجمالي الأخبار: **{len(related_items)} خبر**")
     cols = st.columns(3)
-    for index, item in enumerate(related_items):
-        with cols[index % 3]:
+    for i, item in enumerate(related_items):
+        with cols[i % 3]:
             st.image(item['image'], use_container_width=True)
-            st.markdown(f"**{item['source']}**")
-            st.markdown(f"[{item['title']}]({item['link']})")
-            st.write("---")
+            st.markdown(f"**{item['source']}**\n[{item['title']}]({item['link']})\n---")
 else:
-    st.info("لا توجد أخبار منشورة حالياً تحت هذا التبويب. إذا كان العداد بجانب المصدر (0)، فهذا يعني أن المصدر الرئيسي متوقف مؤقتاً.")
+    st.info("لا توجد أخبار منشورة حالياً تحت هذا التبويب. إذا كان العداد (0)، فالمصدر محجوب من السيرفر الأصلي.")
