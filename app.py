@@ -31,32 +31,22 @@ with col_text:
     st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة.")
 st.divider()
 
-# 2. بنك المصادر
+# 2. بنك المصادر (تم استبدال rss.app بالروابط الرسمية المباشرة!)
 ALL_SOURCES = [
-    {"name": "المصري اليوم Page", "url": "https://rss.app/feeds/0qilsswhtljm7TpX.xml"},
-    {"name": "القاهرة 24 Page", "url": "https://rss.app/feeds/fSxYHaCDdTtQnPcc.xml"},
-    {"name": "اليوم السابع Page", "url": "https://rss.app/feeds/yS4uMduCaejNZYj8.xml"},
-    {"name": "صدى البلد Page", "url": "https://rss.app/feeds/QmEgZe5stNIFBrub.xml"},
-    {"name": "العربية مصر Page", "url": "https://rss.app/feeds/hoc4wHdnB7ZkJIun.xml"},
-    {"name": "حدث بالفعل Page", "url": "https://rss.app/feeds/sUfKUXNv3LLJjC8X.xml"},
-    {"name": "تليجراف مصر Page", "url": "https://rss.app/feeds/yS4uMduCaejNZYj8.xml"},
-    {"name": "صحيفة الشرق الأوسط Page", "url": "https://rss.app/feeds/WrrcuX75FOhb3MyZ.xml"},
-    {"name": "Arabi21 - عربي21 Page", "url": "https://rss.app/feeds/IELo97hFudhqzc3b.xml"},
-    {"name": "Eekad - إيكاد Page", "url": "https://rss.app/feeds/dIksWt06BYI9wq9h.xml"},
-    {"name": "شبكة رصد Page", "url": "https://rss.app/feeds/UY9b0tCrWqLlDUS2.xml"},
-    {"name": "Mada Page", "url": "https://rss.app/feeds/aZtPJd9x1TdXhpbc.xml"},
-    {"name": "مزيد Page", "url": "https://rss.app/feeds/EKNJ1yBhz9dYQesm.xml"},
-    {"name": "عربي بوست Page", "url": "https://rss.app/feeds/LzcCUDjvwsYkxeJb.xml"},
-    {"name": "العربي الجديد Page", "url": "https://rss.app/feeds/UitAtgEww18TWQag.xml"},
-    {"name": "حقوق الإنسان Page", "url": "https://rss.app/feeds/KQOHigY4eHs2OXV0.xml"},
-    {"name": "تكنوقراط Page", "url": "https://rss.app/feeds/ITEpCccZdY1r0M4P.xml"},
-    {"name": "المصري اليوم إكس Page", "url": "https://rss.app/feeds/idlogJBSLTtWCMLm.xml"},
-    {"name": "مزيد ستوريز Page", "url": "https://rss.app/feeds/n5ZkHXC4f0Zx7tzt.xml"},
-    {"name": "الشرق الأوسط منشنز Page", "url": "https://rss.app/feeds/GsU4dAB2KkXc8ctB.xml"},
-    {"name": "عربي نيوز Page", "url": "https://rss.app/feeds/IELo97hFudhqzc3b.xml"},
-    {"name": "The Guardian Page", "url": "https://www.theguardian.com/world/rss"},
-    {"name": "The Economist Page", "url": "https://www.economist.com/the-world-this-week/rss.xml"},
-    {"name": "BBC News Page", "url": "http://feeds.bbci.co.uk/news/world/rss.xml"}
+    {"name": "المصري اليوم", "url": "https://www.almasryalyoum.com/rss/rss"},
+    {"name": "اليوم السابع", "url": "https://www.youm7.com/rss/SectionRss?SectionID=65"},
+    {"name": "القاهرة 24", "url": "https://www.cairo24.com/rss"},
+    {"name": "صدى البلد", "url": "https://www.elbalad.news/rss.aspx"},
+    {"name": "الشروق", "url": "https://www.shorouknews.com/rss/home.aspx"},
+    {"name": "الوفد", "url": "https://alwafd.news/rss"},
+    {"name": "عربي 21", "url": "https://arabi21.com/rss"},
+    {"name": "عربي بوست", "url": "https://arabicpost.net/feed/"},
+    {"name": "الشرق الأوسط", "url": "https://aawsat.com/feed"},
+    {"name": "الجزيرة", "url": "https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9"},
+    {"name": "BBC عربي", "url": "http://feeds.bbci.co.uk/arabic/rss.xml"},
+    {"name": "روسيا اليوم", "url": "https://arabic.rt.com/rss/"},
+    {"name": "العربية نت", "url": "https://www.alarabiya.net/.mrss/ar/latest-news.xml"},
+    {"name": "The Guardian", "url": "https://www.theguardian.com/world/rss"}
 ]
 
 def extract_image_url(entry):
@@ -67,27 +57,14 @@ def extract_image_url(entry):
         if match: return match.group(1)
     return "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=500&q=80"
 
-# --- شبكة البروكسي الثقيلة لاختراق حظر rss.app ---
+# --- جلب البيانات ---
 def fetch_feed_robust(url):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
-    encoded_url = urllib.parse.quote(url, safe='')
-    
-    # 1. الاتصال المباشر
     try:
-        f = feedparser.parse(url, agent=headers['User-Agent'])
+        res = requests.get(url, headers=headers, timeout=10)
+        f = feedparser.parse(res.content)
         if f.entries: return f
     except: pass
-    # 2. نفق Codetabs
-    try:
-        f = feedparser.parse(f"https://api.codetabs.com/v1/proxy?quest={url}")
-        if f.entries: return f
-    except: pass
-    # 3. نفق Corsproxy
-    try:
-        f = feedparser.parse(f"https://corsproxy.io/?{encoded_url}")
-        if f.entries: return f
-    except: pass
-    
     return None
 
 @st.cache_data(ttl=600)
@@ -106,17 +83,17 @@ def fetch_trending_data():
                 source_news_dict[source['name']].append(item)
     return all_news, source_news_dict
 
-# --- Groq مع التحديث الذكي لتقطيع الكلمات (حل الفاصلة العربية) ---
+# --- Groq الذكي ---
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
         sample_titles = list(set([item['title'] for item in news_list]))[:50]
         prompt = f"""
-        استخرج أهم 6 مواضيع أو أحداث (ترند) من هذه العناوين:
+        استخرج أهم 6 مواضيع أو أسماء شخصيات (ترند) من هذه العناوين:
         {" | ".join(sample_titles)}
         
         شروط:
-        1. النتيجة كلمات فقط مفصولة بفاصلة.
+        1. النتيجة كلمات قصيرة جداً (أسماء أو أحداث) مفصولة بفاصلة.
         2. عربية حصراً.
         3. بدون أي شرح.
         """
@@ -125,7 +102,6 @@ def get_trends_from_groq(news_list):
                             headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, timeout=15)
         if res.status_code == 200:
             content = res.json()['choices'][0]['message']['content'].strip()
-            # هنا السحر: القص باستخدام الفاصلة الإنجليزية (,) أو العربية (،) أو الخط (-)
             trends = [t.strip() for t in re.split(r'[,،\-]', content) if len(t.strip()) > 2]
             return trends[:6] if trends else None
     except: pass
@@ -139,7 +115,7 @@ def get_trends_fallback(news_list):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-with st.spinner('⏳ جاري تخطي الحماية ومسح المصادر...'):
+with st.spinner('⏳ جاري جلب الأخبار من المصادر الرسمية...'):
     news_data, source_data_dict = fetch_trending_data()
     dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
@@ -181,4 +157,4 @@ if related_items:
             st.image(item['image'], use_container_width=True)
             st.markdown(f"**{item['source']}**\n[{item['title']}]({item['link']})\n---")
 else:
-    st.info("لا توجد أخبار منشورة حالياً تحت هذا التبويب. إذا كان العداد (0)، فالمصدر محجوب من السيرفر الأصلي.")
+    st.info("الرادار يجمع الأخبار الآن، يرجى المحاولة بعد قليل.")
