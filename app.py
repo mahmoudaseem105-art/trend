@@ -2,6 +2,7 @@ import streamlit as st
 import feedparser
 import re
 import requests
+import urllib.parse
 from collections import Counter
 from PIL import Image
 
@@ -20,108 +21,114 @@ def get_resized_logo(width_size=120):
     except:
         return None
 
-# --- التنسيق العلوي ---
 col_text, col_logo = st.columns([6, 1]) 
 with col_logo:
     logo_img = get_resized_logo(width_size=100)
     if logo_img: st.image(logo_img)
 with col_text:
     st.title("🔥 SherifOsmanClub الإخبارية")
-    st.markdown("الرادار المستقل للأخبار العاجلة وترندات الساعة من المصادر الرسمية.")
+    st.markdown("الرادار المستقل للأخبار العاجلة والنبض الحقيقي للسوشيال ميديا.")
 st.divider()
 
-# 2. بنك المصادر الرسمية 100% (24 مصدر قوي ومباشر)
+# 2. مصادرك الخاصة (مربوطة بقنوات السوشيال ميديا/تليجرام الرسمية لتحديثات لحظية)
 ALL_SOURCES = [
-    {"name": "المصري اليوم", "url": "https://www.almasryalyoum.com/rss/rss"},
-    {"name": "اليوم السابع", "url": "https://www.youm7.com/rss/SectionRss?SectionID=65"},
-    {"name": "القاهرة 24", "url": "https://www.cairo24.com/rss"},
-    {"name": "صدى البلد", "url": "https://www.elbalad.news/rss.aspx"},
-    {"name": "الشروق", "url": "https://www.shorouknews.com/rss/home.aspx"},
-    {"name": "الوفد", "url": "https://alwafd.news/rss"},
-    {"name": "الوطن", "url": "https://www.elwatannews.com/home/rss"},
-    {"name": "بوابة الأهرام", "url": "https://gate.ahram.org.eg/NewsRss.aspx"},
-    {"name": "الدستور", "url": "https://www.dostor.org/rss.aspx"},
-    {"name": "فيتو", "url": "https://www.vetogate.com/rss.aspx"},
-    {"name": "أخبار اليوم", "url": "https://akhbarelyom.com/rss/home"},
-    {"name": "مصراوي", "url": "https://www.masrawy.com/CrossDomain/Public/RSS/HomePage"},
-    {"name": "عربي 21", "url": "https://arabi21.com/rss"},
-    {"name": "عربي بوست", "url": "https://arabicpost.net/feed/"},
-    {"name": "الشرق الأوسط", "url": "https://aawsat.com/feed"},
-    {"name": "الجزيرة", "url": "https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9"},
-    {"name": "BBC عربي", "url": "http://feeds.bbci.co.uk/arabic/rss.xml"},
-    {"name": "روسيا اليوم", "url": "https://arabic.rt.com/rss/"},
-    {"name": "سكاي نيوز", "url": "https://www.skynewsarabia.com/web/rss.xml"},
-    {"name": "CNN بالعربية", "url": "https://arabic.cnn.com/api/v1/rss/middle_east/rss.xml"},
-    {"name": "العربية نت", "url": "https://www.alarabiya.net/.mrss/ar/latest-news.xml"},
-    {"name": "القدس العربي", "url": "https://www.alquds.co.uk/feed/"},
-    {"name": "اندبندنت عربية", "url": "https://www.independentarabia.com/rss"},
-    {"name": "فرانس 24", "url": "https://www.france24.com/ar/rss"}
+    {"name": "شبكة رصد (سوشيال)", "url": "https://rsshub.app/telegram/channel/rassd_egypt"},
+    {"name": "القاهرة 24 (سوشيال)", "url": "https://rsshub.app/telegram/channel/cairo24_news"},
+    {"name": "اليوم السابع (سوشيال)", "url": "https://rsshub.app/telegram/channel/Youm7"},
+    {"name": "المصري اليوم (سوشيال)", "url": "https://rsshub.app/telegram/channel/almasryalyoum"},
+    {"name": "إيكاد Eekad (سوشيال)", "url": "https://rsshub.app/telegram/channel/EekadFacts"},
+    {"name": "عربي 21 (سوشيال)", "url": "https://rsshub.app/telegram/channel/Arabi21News"},
+    {"name": "مدى مصر (سوشيال)", "url": "https://rsshub.app/telegram/channel/MadaMasr"},
+    {"name": "عربي بوست (سوشيال)", "url": "https://rsshub.app/telegram/channel/Arabic_Post"},
+    {"name": "مزيد (سوشيال)", "url": "https://rsshub.app/telegram/channel/Mazeeed"},
+    {"name": "تليجراف مصر (سوشيال)", "url": "https://rsshub.app/telegram/channel/telegraph_egypt"},
+    {"name": "صدى البلد (سوشيال)", "url": "https://rsshub.app/telegram/channel/ElBaladOfficial"},
+    {"name": "الجزيرة مصر (سوشيال)", "url": "https://rsshub.app/telegram/channel/AJA_Egypt"},
+    {"name": "الجزيرة عاجل (سوشيال)", "url": "https://rsshub.app/telegram/channel/AJA_News"},
+    {"name": "الشرق الأوسط (سوشيال)", "url": "https://rsshub.app/telegram/channel/aawsat_news"},
+    {"name": "حقوق الإنسان (سوشيال)", "url": "https://rsshub.app/telegram/channel/AmnestyAR"},
+    {"name": "العربية عاجل (سوشيال)", "url": "https://rsshub.app/telegram/channel/Alarabiya_Brk"},
+    {"name": "سكاي نيوز (سوشيال)", "url": "https://rsshub.app/telegram/channel/SkyNewsArabia_B"},
+    {"name": "بي بي سي عربي (سوشيال)", "url": "https://rsshub.app/telegram/channel/bbcarabic"},
+    {"name": "روسيا اليوم (سوشيال)", "url": "https://rsshub.app/telegram/channel/RTarabic_News"},
+    {"name": "العربي الجديد (سوشيال)", "url": "https://rsshub.app/telegram/channel/alaraby_ar"},
+    {"name": "قناة الشرق (سوشيال)", "url": "https://rsshub.app/telegram/channel/ElsharqTV"},
+    {"name": "مكملين (سوشيال)", "url": "https://rsshub.app/telegram/channel/mekameeleen"},
+    {"name": "The Guardian (Social)", "url": "https://rsshub.app/telegram/channel/guardian"},
+    {"name": "حدث بالفعل", "url": "https://news.google.com/rss/search?q=site:hadathbelfael.com"}
 ]
 
-# 3. دالة استخراج الصور المتطورة للمواقع الرسمية
 def extract_image_url(entry):
-    if hasattr(entry, 'media_thumbnail') and len(entry.media_thumbnail) > 0: 
-        return entry.media_thumbnail[0]['url']
-    if hasattr(entry, 'media_content') and len(entry.media_content) > 0: 
-        return entry.media_content[0]['url']
-    if hasattr(entry, 'links'):
-        for link in entry.links:
-            if link.get('type', '').startswith('image/'): return link['href']
-    if hasattr(entry, 'enclosures') and len(entry.enclosures) > 0:
-        for enc in entry.enclosures:
-            if enc.get('type', '').startswith('image/'): return enc['href']
+    if hasattr(entry, 'media_content') and len(entry.media_content) > 0: return entry.media_content[0]['url']
     if hasattr(entry, 'summary'):
         match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.summary)
         if match: return match.group(1)
-    # صورة افتراضية أنيقة في حال غياب الصورة تماماً من المصدر الرسمي
-    return "https://images.unsplash.com/photo-1495020689067-958852a7765e?q=80&w=500"
+    if hasattr(entry, 'description'):
+        match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.description)
+        if match: return match.group(1)
+    return "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=500&q=80"
 
-# --- جلب البيانات ---
-@st.cache_data(ttl=600)
+# --- جلب البيانات مع نفق بروكسي للحماية ---
+def fetch_feed_robust(url):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        f = feedparser.parse(res.content)
+        if f.entries: return f
+    except: pass
+    
+    # نفق بديل لضمان عدم توقف السوشيال ميديا
+    try:
+        encoded_url = urllib.parse.quote(url, safe='')
+        proxy_url = f"https://api.allorigins.win/raw?url={encoded_url}"
+        res = requests.get(proxy_url, headers=headers, timeout=15)
+        f = feedparser.parse(res.content)
+        if f.entries: return f
+    except: pass
+    return None
+
+@st.cache_data(ttl=300) # التحديث كل 5 دقائق لسرعة السوشيال ميديا
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
-    
     for source in ALL_SOURCES:
-        try:
-            res = requests.get(source['url'], headers=headers, timeout=10)
-            feed = feedparser.parse(res.content)
-            if feed.entries:
-                for entry in feed.entries[:30]:
-                    item = {
-                        "title": entry.title.strip(),
-                        "link": entry.link,
-                        "source": source['name'],
-                        "image": extract_image_url(entry)
-                    }
-                    all_news.append(item)
-                    source_news_dict[source['name']].append(item)
-        except: continue
+        feed = fetch_feed_robust(source['url'])
+        if feed and feed.entries:
+            for entry in feed.entries[:25]:
+                # تنظيف نصوص التليجرام لتبدو كعناوين أنيقة
+                clean_title = re.sub(r'<[^>]+>', '', entry.title).strip()
+                if len(clean_title) > 100: clean_title = clean_title[:100] + "..."
+                
+                item = {
+                    "title": clean_title, "link": entry.link,
+                    "source": source['name'], "image": extract_image_url(entry)
+                }
+                all_news.append(item)
+                source_news_dict[source['name']].append(item)
     return all_news, source_news_dict
 
-# --- Groq الذكي (بأوامر صارمة لقص الترندات ككلمات مفردة) ---
+# --- Groq الذكي بأوامر عسكرية صارمة للترند ---
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
-        sample_titles = list(set([item['title'] for item in news_list]))[:50]
+        sample_titles = list(set([item['title'] for item in news_list]))[:60]
         prompt = f"""
-        استخرج أهم 6 مواضيع أو أسماء شخصيات (ترند) من هذه العناوين:
+        اقرأ هذه العناوين الإخبارية من السوشيال ميديا:
         {" | ".join(sample_titles)}
         
-        شروط عسكرية صارمة:
-        1. النتيجة يجب أن تكون كلمات مفردة فقط (كلمة واحدة لكل ترند).
-        2. مفصولة بفاصلة عربية (،).
-        3. ممنوع كتابة أي جمل أو أفعال أو شرح.
-        مثال للرد الصحيح: الأهلي، غزة، الدولار، ترامب، الذهب، الطقس
+        استخرج أهم 6 ترندات حالية. 
+        شروط التنفيذ عسكرية:
+        1. كل ترند يجب أن يكون (كلمة واحدة فقط)، إما اسم شخص (مثل: بايدن)، دولة (مثل: مصر)، أو حدث (مثل: الدولار).
+        2. ممنوع منعاً باتاً استخدام أي أفعال أو جمل طويلة.
+        3. النتائج مفصولة بفاصلة عربية (،) فقط.
         """
         res = requests.post("https://api.groq.com/openai/v1/chat/completions", 
                             json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1}, 
                             headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, timeout=15)
         if res.status_code == 200:
             content = res.json()['choices'][0]['message']['content'].strip()
-            # تقسيم دقيق لضمان خروج الكلمات مفردة
-            trends = [t.strip() for t in re.split(r'[,،\-]', content) if len(t.strip()) > 2]
+            # استخراج الكلمات المفردة فقط بدقة
+            trends = [t.strip() for t in re.split(r'[,،\-]', content) if len(t.strip()) > 2 and len(t.split()) <= 2]
             return trends[:6] if trends else None
     except: pass
     return None
@@ -134,7 +141,7 @@ def get_trends_fallback(news_list):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-with st.spinner('⏳ جاري جلب الأخبار من المواقع الرسمية مباشرة...'):
+with st.spinner('⏳ جاري مسح قنوات السوشيال ميديا وتفريغ البيانات...'):
     news_data, source_data_dict = fetch_trending_data()
     dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
@@ -146,17 +153,14 @@ st.sidebar.divider()
 
 if 'view_mode' not in st.session_state: st.session_state.update({'view_mode': 'trend', 'selected_value': ""})
 
-# --- قائمة الترند ---
 if dominating_trends:
     st.sidebar.subheader("🚨 ترند الساعة (AI)")
     for trend in dominating_trends:
-        # إزالة أي مسافات زائدة لضمان عمل زر البحث بشكل مثالي
         clean_trend = trend.replace(".", "").strip()
         if st.sidebar.button(f"🔥 {clean_trend}", key=f"tr_{clean_trend}", use_container_width=True):
             st.session_state.update({'view_mode': 'trend', 'selected_value': clean_trend})
 st.sidebar.divider()
 
-# --- قائمة المصادر الـ 24 ---
 st.sidebar.subheader("🟢 غرف المصادر المباشرة")
 for source in ALL_SOURCES:
     news_count = len(source_data_dict.get(source['name'], []))
@@ -165,10 +169,8 @@ for source in ALL_SOURCES:
 
 if st.session_state.selected_value == "" and dominating_trends: st.session_state.selected_value = dominating_trends[0]
 
-# --- الشاشة الرئيسية ---
 if st.session_state.view_mode == 'trend':
     st.subheader(f"🔍 تغطية حية لترند الساعة: 【 {st.session_state.selected_value} 】")
-    # البحث بمرونة داخل العناوين
     related_items = [item for item in news_data if st.session_state.selected_value.lower() in item['title'].lower()]
 else:
     st.subheader(f"📡 بث مباشر من غرفة أخبار: 【 {st.session_state.selected_value} 】")
@@ -179,8 +181,7 @@ if related_items:
     cols = st.columns(3)
     for i, item in enumerate(related_items):
         with cols[i % 3]:
-            # عرض الصورة الأصلية بشكل مرتب
             st.image(item['image'], use_container_width=True)
             st.markdown(f"**{item['source']}**\n\n[{item['title']}]({item['link']})\n---")
 else:
-    st.info("لا توجد أخبار مطابقة حالياً. إذا كنت في قسم الترند، قد يكون الحدث منقضياً أو تم ذكره بكلمة مختلفة في العناوين.")
+    st.info("لا توجد ميديا مطابقة. الرادار يقوم بالتحديث المستمر لشبكات السوشيال ميديا.")
