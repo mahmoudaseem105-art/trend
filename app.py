@@ -2,6 +2,7 @@ import streamlit as st
 import feedparser
 import re
 import requests
+import urllib.parse
 from collections import Counter
 from PIL import Image
 
@@ -26,68 +27,65 @@ with col_logo:
     if logo_img: st.image(logo_img)
 with col_text:
     st.title("🔥 SherifOsmanClub الإخبارية")
-    st.markdown("الرادار المستقل للأخبار العاجلة (نظام هجين: سوشيال ميديا + مصادر رسمية).")
+    st.markdown("الرادار المستقل للأخبار العاجلة (نظام المحركات الثلاثة المنيع).")
 st.divider()
 
-# 2. بنك المصادر الهجين (مزيج بين تليجرام السريع والـ RSS المستقر)
+# 2. بنك المصادر (نظام المحركات الثلاثة الموزع بدقة)
 ALL_SOURCES = [
-    # --- قسم السوشيال ميديا (تليجرام مباشر) ---
-    {"name": "شبكة رصد", "type": "telegram", "val": "rassd_egypt"},
-    {"name": "إيكاد Eekad", "type": "telegram", "val": "EekadFacts"},
+    # --- المحرك الأول: السوشيال ميديا (تليجرام مباشر - المصادر الخضراء المؤكدة) ---
     {"name": "عربي 21", "type": "telegram", "val": "Arabi21News"},
-    {"name": "مدى مصر", "type": "telegram", "val": "MadaMasr"},
-    {"name": "عربي بوست", "type": "telegram", "val": "Arabic_Post"},
-    {"name": "مزيد", "type": "telegram", "val": "Mazeeed"},
-    {"name": "تليجراف مصر", "type": "telegram", "val": "telegraph_egypt"},
-    {"name": "الجزيرة مصر", "type": "telegram", "val": "AJA_Egypt"},
-    {"name": "الجزيرة عاجل", "type": "telegram", "val": "AJA_News"},
-    {"name": "العربية عاجل", "type": "telegram", "val": "Alarabiya_Brk"},
-    {"name": "سكاي نيوز", "type": "telegram", "val": "SkyNewsArabia_B"},
     {"name": "بي بي سي عربي", "type": "telegram", "val": "bbcarabic"},
     {"name": "روسيا اليوم", "type": "telegram", "val": "RTarabic_News"},
-    {"name": "العربي الجديد", "type": "telegram", "val": "alaraby_ar"},
-    {"name": "قناة الشرق", "type": "telegram", "val": "ElsharqTV"},
-    {"name": "مكملين", "type": "telegram", "val": "mekameeleen"},
     {"name": "تغطية غزة", "type": "telegram", "val": "GazaNewsNow"},
     {"name": "الحدث", "type": "telegram", "val": "alhadath"},
-    {"name": "حقوق الإنسان", "type": "telegram", "val": "AmnestyAR"},
     
-    # --- قسم المواقع الكبرى الرسمية (RSS مباشر ومستقر) ---
+    # --- المحرك الثاني: الروابط الرسمية (RSS عبر بروكسي قوي لتخطي حظر Streamlit) ---
     {"name": "القاهرة 24", "type": "rss", "val": "https://www.cairo24.com/rss"},
     {"name": "اليوم السابع", "type": "rss", "val": "https://www.youm7.com/rss/SectionRss?SectionID=65"},
     {"name": "المصري اليوم", "type": "rss", "val": "https://www.almasryalyoum.com/rss/rss"},
     {"name": "صدى البلد", "type": "rss", "val": "https://www.elbalad.news/rss.aspx"},
-    {"name": "الشرق الأوسط", "type": "rss", "val": "https://aawsat.com/feed"}
+    {"name": "الشرق الأوسط", "type": "rss", "val": "https://aawsat.com/feed"},
+    {"name": "شبكة رصد", "type": "rss", "val": "https://rassd.com/feed"},
+    {"name": "إيكاد Eekad", "type": "rss", "val": "https://eekad.net/feed"},
+    {"name": "مدى مصر", "type": "rss", "val": "https://www.madamasr.com/ar/feed/"},
+    {"name": "عربي بوست", "type": "rss", "val": "https://arabicpost.net/feed/"},
+    {"name": "تليجراف مصر", "type": "rss", "val": "https://telegraphmisr.com/rss"},
+    {"name": "العربي الجديد", "type": "rss", "val": "https://www.alaraby.co.uk/rss"},
+    {"name": "قناة الشرق", "type": "rss", "val": "https://elsharq.tv/feed"},
+    {"name": "مكملين", "type": "rss", "val": "https://mekameleen.tv/feed"},
+    {"name": "الجزيرة مصر", "type": "rss", "val": "https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9"},
+    {"name": "الجزيرة عاجل", "type": "rss", "val": "https://www.aljazeera.net/xml/rss/all.xml"},
+    {"name": "العربية عاجل", "type": "rss", "val": "https://www.alarabiya.net/.mrss/ar/latest-news.xml"},
+    {"name": "سكاي نيوز", "type": "rss", "val": "https://www.skynewsarabia.com/web/rss.xml"},
+    
+    # --- المحرك الثالث: محرك بحث جوجل (للمصادر العنيدة جداً) ---
+    {"name": "مزيد", "type": "google", "val": "مزيد أخبار"},
+    {"name": "حقوق الإنسان", "type": "google", "val": "منظمة العفو الدولية حقوق الإنسان"}
 ]
 
 DEFAULT_IMAGE = "https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=500&q=80"
 
-# --- 3. محركات سحب البيانات (المحرك الهجين) ---
+# --- 3. محركات السحب الثلاثة ---
 
 def fetch_telegram_direct(handle, source_name):
     url = f"https://t.me/s/{handle}"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     items = []
     try:
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code != 200: return []
-        
         blocks = res.text.split('tgme_widget_message_wrap js-widget_message_wrap')[1:]
         for block in reversed(blocks):
             text_match = re.search(r'<div class="tgme_widget_message_text[^>]*>(.*?)</div>', block, re.DOTALL)
             if not text_match: continue
-            
             raw_text = text_match.group(1)
             clean_text = re.sub(r'<br/?>', ' | ', raw_text)
             clean_text = re.sub(r'<[^>]+>', '', clean_text).strip()
             if len(clean_text) < 15: continue
-            
             img_match = re.search(r"background-image:url\('([^']+)'\)", block)
             image_url = img_match.group(1) if img_match else DEFAULT_IMAGE
-            
             link_match = re.search(r'href="(https://t.me/[^"]+/\d+)"', block)
             post_link = link_match.group(1) if link_match else url
-            
             items.append({
                 "title": clean_text[:130] + "..." if len(clean_text) > 130 else clean_text,
                 "link": post_link, "source": source_name, "image": image_url
@@ -97,46 +95,59 @@ def fetch_telegram_direct(handle, source_name):
     except: return []
 
 def fetch_rss_direct(url, source_name):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
     items = []
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        feed = feedparser.parse(res.content)
-        for entry in feed.entries[:20]:
-            # استخراج الصورة من الـ RSS
-            img_url = DEFAULT_IMAGE
-            if hasattr(entry, 'media_content') and len(entry.media_content) > 0: img_url = entry.media_content[0]['url']
-            elif hasattr(entry, 'enclosures') and len(entry.enclosures) > 0: img_url = entry.enclosures[0]['href']
-            elif hasattr(entry, 'summary'):
-                m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.summary)
-                if m: img_url = m.group(1)
+    # شبكة بروكسيات للضرب بيد من حديد لتخطي أي حظر من المواقع الكبرى
+    proxy_urls = [
+        url,
+        f"https://api.allorigins.win/raw?url={urllib.parse.quote(url, safe='')}",
+        f"https://api.codetabs.com/v1/proxy?quest={urllib.parse.quote(url, safe='')}"
+    ]
+    for purl in proxy_urls:
+        try:
+            res = requests.get(purl, headers=headers, timeout=12)
+            feed = feedparser.parse(res.content)
+            if not feed.entries: continue
+            for entry in feed.entries[:20]:
+                img_url = DEFAULT_IMAGE
+                if hasattr(entry, 'media_content') and len(entry.media_content) > 0: img_url = entry.media_content[0]['url']
+                elif hasattr(entry, 'enclosures') and len(entry.enclosures) > 0: img_url = entry.enclosures[0]['href']
+                elif hasattr(entry, 'summary'):
+                    m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', entry.summary)
+                    if m: img_url = m.group(1)
                 
-            items.append({
-                "title": entry.title.strip(),
-                "link": entry.link, "source": source_name, "image": img_url
-            })
-        return items
-    except: return []
+                title = entry.title.strip()
+                title = re.sub(r' - [^-]+$', '', title).strip() # تنظيف هوامش جوجل إن وجدت
+                items.append({
+                    "title": title, "link": entry.link, "source": source_name, "image": img_url
+                })
+            if items: return items
+        except: continue
+    return items
+
+def fetch_google_news(query, source_name):
+    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=ar&gl=EG&ceid=EG:ar"
+    return fetch_rss_direct(url, source_name)
 
 @st.cache_data(ttl=300) 
 def fetch_trending_data():
     all_news = []
     source_news_dict = {src['name']: [] for src in ALL_SOURCES}
-    
     for source in ALL_SOURCES:
-        # توجيه الطلب للمحرك المناسب حسب نوع المصدر
+        # توجيه المهمة للمحرك المخصص بذكاء
         if source['type'] == 'telegram':
             channel_items = fetch_telegram_direct(source['val'], source['name'])
-        else:
+        elif source['type'] == 'rss':
             channel_items = fetch_rss_direct(source['val'], source['name'])
+        else:
+            channel_items = fetch_google_news(source['val'], source['name'])
             
         if channel_items:
             all_news.extend(channel_items)
             source_news_dict[source['name']] = channel_items
-            
     return all_news, source_news_dict
 
-# --- 4. Groq الذكي (لصيد الترندات بكلمة واحدة) ---
+# --- 4. Groq الذكي ---
 @st.cache_data(ttl=900) 
 def get_trends_from_groq(news_list):
     try:
@@ -169,8 +180,8 @@ def get_trends_fallback(news_list):
             if len(word) > 3 and word not in STOP_WORDS: words.append(word)
     return [word for word, count in Counter(words).most_common(6) if count > 1]
 
-# --- 5. تشغيل واجهة المستخدم ---
-with st.spinner('⏳ جاري تشغيل النظام الهجين وسحب الأخبار...'):
+# --- 5. تشغيل النظام ---
+with st.spinner('⏳ جاري تشغيل المحركات الثلاثية واختراق الحظر...'):
     news_data, source_data_dict = fetch_trending_data()
     dominating_trends = get_trends_from_groq(news_data) or get_trends_fallback(news_data)
 
@@ -210,12 +221,11 @@ if related_items:
     cols = st.columns(3)
     for i, item in enumerate(related_items):
         with cols[i % 3]:
-            # درع الحماية لمنع انهيار الموقع بسبب الصور المعطوبة
+            # درع الحماية ضد الصور المعطوبة لكي لا ينهار الموقع
             try:
                 st.image(item['image'], use_container_width=True)
             except:
                 st.image(DEFAULT_IMAGE, use_container_width=True)
-                
             st.markdown(f"**{item['source']}**\n\n[{item['title']}]({item['link']})\n---")
 else:
-    st.info("لا توجد ميديا مطابقة. تأكد من تحديث الرادار.")
+    st.info("الرادار يجمع الأخبار الآن، أو أن المصدر لم ينشر جديداً.")
